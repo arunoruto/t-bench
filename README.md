@@ -21,6 +21,9 @@ through lives entirely here, as **adapters**:
 src/tbench/
   schema.py            ClusterRequest / ScatterResult -- the common
                         pydantic request/result models
+  sweep.py              MaterialSpec / SweepRequest / expand_sweep() --
+                        one cluster + a wavelength range -> N ClusterRequests
+  geometry.py           load_positions() -- read a cluster position file
   adapters/
     base.py             ScattererAdapter ABC: solve(request) -> result
     mstm_python.py       MstmPythonAdapter    -- calls pymstm.MSTM directly
@@ -28,6 +31,7 @@ src/tbench/
     fastmm2_python.py     Fastmm2PythonAdapter -- calls pyfastmm.FaSTMM2 directly
     fastmm2_cli.py         Fastmm2CliAdapter    -- writes geometry.h5, shells out to `FaSTMM2`
   runner.py             run_benchmark(request, adapters) -> list[ScatterResult]
+                        run_sweep(sweep, adapters) -> {adapter_name: [ScatterResult]}
 ```
 
 Each adapter translates the common `ClusterRequest` into that tool's own
@@ -74,6 +78,44 @@ for r in results:
 ```
 
 See `examples/compare_two_spheres.py` for a complete runnable example.
+
+### Wavelength sweeps and refidxdb
+
+`SweepRequest` (in `sweep.py`) sweeps one cluster geometry across a range
+of wavelengths, expanding into one `ClusterRequest` per wavelength via
+`expand_sweep()`. The material can be a fixed `(n, k)` or a
+[refidxdb](https://github.com/arunoruto/RefIdxDB)-backed dispersive
+lookup (`MaterialSpec(refidxdb_url=...)`, any refractiveindex.info or
+ARIA URL) -- refidxdb is a normal PyPI dependency here, not a path
+dependency like pymstm/pyfastmm, since it's pure Python with no native
+build and already published. Wavelengths are always in micrometers,
+matching refidxdb's own `interpolate()` convention (confirmed against
+real cached data: SiO2 at 0.5/1.0um gives n~1.468/1.459).
+
+```python
+from tbench import MaterialSpec, SweepRequest, ALL_ADAPTERS, run_sweep
+
+sweep = SweepRequest(
+    coords=[(-1.5, 0.0, 0.0), (1.5, 0.0, 0.0)],
+    radii=[1.0, 1.0],
+    material=MaterialSpec(
+        refidxdb_url="https://refractiveindex.info/database/data/main/SiO2/nk/Rodriguez-de%20Marcos.yml"
+    ),
+    wavelengths_um=[0.4, 0.6, 0.8, 1.0],
+)
+results = run_sweep(sweep, [cls() for cls in ALL_ADAPTERS])  # {adapter_name: [ScatterResult, ...]}
+```
+
+### Dashboard
+
+```bash
+uv run streamlit run scripts/streamlit_app.py
+```
+
+Upload a cluster position file (or use the default two-sphere cluster),
+pick a material and wavelength range, pick which adapters to run, and
+compare accuracy (cross-section spectra) and speed (wall-clock time) for
+all of them side by side.
 
 ## Setup
 
