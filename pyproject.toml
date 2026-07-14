@@ -1,0 +1,43 @@
+[project]
+name = "tbench"
+version = "0.1.0"
+description = "Benchmark harness comparing MSTM and FaSTMM2 (Python wrappers and CLI binaries) on the same cluster configurations"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.1",
+    "pydantic>=2.0",
+    "pymstm",
+    "pyfastmm",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov", "meson>=1.1", "ninja", "meson-python>=0.15", "h5py>=3.0"]
+
+[tool.uv.sources]
+# pymstm and pyfastmm are separate, independently-versioned repos (not
+# workspace members of t-bench) -- plain local path dependencies, not a
+# uv workspace. t-bench is the only project that knows about both; see
+# src/tbench/adapters/ for why (it owns the adapters that bridge each
+# tool's actual API to the common ClusterRequest/ScatterResult schema,
+# rather than either tool depending on t-bench).
+pymstm = { path = "../pyMSTM", editable = true }
+pyfastmm = { path = "../pyFaSTMM", editable = true }
+
+[tool.uv]
+# Same reasoning as pymstm's/pyfastmm's own pyproject.toml: meson-python's
+# editable-install loader hardcodes an absolute `ninja` path seen during
+# the build, which only stays valid if the build happens in a persistent
+# venv (not uv's default ephemeral isolated build env) -- so both need
+# meson/ninja/meson-python available in *this* project's venv (via the
+# `dev` extra) and building without isolation.
+no-build-isolation-package = ["pymstm", "pyfastmm"]
+
+[tool.pyright]
+exclude = [".venv"]
+venvPath = "."
+venv = ".venv"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
