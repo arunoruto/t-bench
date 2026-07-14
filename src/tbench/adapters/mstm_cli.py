@@ -10,6 +10,7 @@ import tempfile
 import time
 
 from tbench.adapters.base import ScattererAdapter
+from tbench.adapters.mstm_python import check_size_parameters
 from tbench.schema import ClusterRequest, ScatterResult
 
 
@@ -25,6 +26,14 @@ class MstmCliAdapter(ScattererAdapter):
     def solve(self, request: ClusterRequest) -> ScatterResult:
         from pymstm._inp import write_inp_file
         from pymstm._parser import parse_mstm_output
+
+        # The CLI binary runs as a separate OS process, so a crash there
+        # (see mstm_python.py's MIN_SIZE_PARAMETER comment for why MSTM
+        # can crash at all) would already surface as a catchable
+        # CalledProcessError rather than taking down the caller -- but
+        # it's still worth failing fast with a clear message instead of
+        # burning time on a doomed subprocess launch.
+        check_size_parameters(request.radii, request.wavenumber)
 
         k = request.wavenumber
         scaled_radii = [k * r for r in request.radii]

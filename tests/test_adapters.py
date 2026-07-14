@@ -9,6 +9,7 @@ from tbench.adapters import (
     MstmCliAdapter,
     MstmPythonAdapter,
 )
+from tbench.adapters.mstm_python import MIN_SIZE_PARAMETER, check_size_parameters
 from tbench.schema import ClusterRequest
 
 _TWO_SPHERES = ClusterRequest(
@@ -94,3 +95,38 @@ def test_mstm_matches_fastmm2_at_nontrivial_wavenumber():
     r_mstm = mstm.solve(request)
     r_fastmm2 = fastmm2.solve(request)
     assert r_mstm.c_ext == pytest.approx(r_fastmm2.c_ext, rel=0.05)
+
+
+def test_check_size_parameters_rejects_pathologically_small_particles():
+    """Regression test for a real bug: MSTM aborts the whole process (a
+    memory-corruption SIGABRT/SIGSEGV, not a catchable exception) when
+    given a size parameter (x = wavenumber * radius) far enough below 1.
+    Found via a real dashboard crash report -- a user scaled a cluster's
+    positions/radii into nanometers (scale=1e-9) while wavelengths stayed
+    in micrometers, producing x as low as ~1e-8, which crashed the whole
+    process. Confirmed by bisecting the real 128-sphere test cluster: MSTM
+    solves fine down to x~1.3e-6 but crashes by x~1.3e-7. This guard must
+    reject such requests with a plain ValueError *before* MSTM ever sees
+    them, since nothing downstream can catch a process abort."""
+    with pytest.raises(ValueError, match="below MSTM's known-crashing threshold"):
+        check_size_parameters(radii=[1.0], wavenumber=MIN_SIZE_PARAMETER / 10)
+
+    # Just above the threshold should pass silently.
+    check_size_parameters(radii=[1.0], wavenumber=MIN_SIZE_PARAMETER * 10)
+
+
+@pytest.mark.parametrize("adapter_cls", [MstmPythonAdapter, MstmCliAdapter])
+def test_mstm_adapter_rejects_pathologically_small_particles(adapter_cls):
+    adapter = adapter_cls()
+    if not adapter.is_available():
+        pytest.skip(f"{adapter.name} not available")
+
+    request = ClusterRequest(
+        coords=[(-1.5, 0.0, 0.0), (1.5, 0.0, 0.0)],
+        radii=[1e-9, 1e-9],
+        refractive_index=[(1.5, 0.01), (1.5, 0.01)],
+        wavenumber=1.0,
+        n_theta=19, n_phi=1, tolerance=1e-4, max_iterations=500,
+    )
+    with pytest.raises(ValueError, match="below MSTM's known-crashing threshold"):
+        adapter.solve(request)

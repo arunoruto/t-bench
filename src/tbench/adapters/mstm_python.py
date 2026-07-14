@@ -7,6 +7,39 @@ import time
 from tbench.adapters.base import ScattererAdapter
 from tbench.schema import ClusterRequest, ScatterResult
 
+# Below this size parameter (x = k*r), MSTM crashes the whole process --
+# not a catchable Python exception, an actual memory-corruption abort
+# (glibc "double free or corruption" / "munmap_chunk(): invalid pointer",
+# SIGABRT/SIGSEGV) -- confirmed directly: bisecting a real 128-sphere
+# cluster found MSTM solves fine down to x~1.3e-6 but crashes by x~1.3e-7,
+# and a synthetic 2-sphere case crashed as high as x~3e-7. FaSTMM2 does
+# *not* crash at the same x (returns near-zero, numerically-degenerate but
+# valid results instead) -- this is specific to MSTM's own Fortran code,
+# not a fundamental property of the physics. Since a process abort can't
+# be caught with try/except (it takes the whole interpreter down, which is
+# exactly the "dashboard crashes" bug report this fixes), the only
+# reliable fix is rejecting the request before it ever reaches MSTM.
+# 1e-4 gives ~1000x margin above the observed crash zone, and is already
+# so deep in the Rayleigh regime (particle 10,000x smaller than the
+# wavelength) that no real use case needs anything smaller -- hitting
+# this is essentially always a units/scale mistake, e.g. a cluster file
+# scaled into a physically nonsensical size range.
+MIN_SIZE_PARAMETER = 1e-4
+
+
+def check_size_parameters(radii: list[float], wavenumber: float) -> None:
+    x_min = wavenumber * min(radii)
+    if x_min < MIN_SIZE_PARAMETER:
+        raise ValueError(
+            f"Size parameter (wavenumber * radius) as low as {x_min:.3g} is "
+            f"below MSTM's known-crashing threshold ({MIN_SIZE_PARAMETER:.0e}) "
+            "-- MSTM aborts the whole process (not a catchable error) for "
+            "pathologically tiny particles relative to the wavelength. This "
+            "is almost always a units/scale mistake (e.g. a cluster scaled "
+            "into femtometers) -- check that coords/radii and wavelength "
+            "are in the same length unit (micrometers)."
+        )
+
 
 class MstmPythonAdapter(ScattererAdapter):
     name = "mstm-python"
@@ -20,6 +53,8 @@ class MstmPythonAdapter(ScattererAdapter):
 
     def solve(self, request: ClusterRequest) -> ScatterResult:
         from pymstm import MSTM
+
+        check_size_parameters(request.radii, request.wavenumber)
 
         # MSTM wants size parameters (x = k*r) directly, not a separate
         # wavenumber -- see schema.py's module docstring.
