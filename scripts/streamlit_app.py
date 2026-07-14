@@ -68,16 +68,14 @@ with c_cluster1:
 with c_cluster2:
     geom_scale = st.number_input(
         "Scale (multiplies every column)", value=1.0, format="%.4g",
-        help=(
-            "Converts the file's own units to **micrometers** -- the same "
-            "unit the wavelength fields below use as a bare number (e.g. "
-            "typing 0.5 there means 0.5 um, not 0.5 m). Pick the scale to "
-            "match your file's raw units, not SI meters: nanometers -> "
-            "1e-3, angstroms -> 1e-4, millimeters -> 1e3. A common mistake "
-            "is using nm-to-*meters* (1e-9) instead of nm-to-*micrometers* "
-            "(1e-3) -- that under-scales radii by another 1e-6 and pushes "
-            "MSTM's size parameter into a range where it crashes."
-        ),
+    )
+    st.caption(
+        "Converts the file's own units to **micrometers** -- the same unit "
+        "the wavelength fields below use (typing 0.5 there means 0.5 um, "
+        "not 0.5 m). Match your file's raw units to micrometers, not SI "
+        "meters: nm -> `1e-3`, angstrom -> `1e-4`, mm -> `1e3`. Using "
+        "nm-to-*meters* (`1e-9`) instead of nm-to-*micrometers* (`1e-3`) "
+        "under-scales radii by another 1e-6 and crashes MSTM."
     )
     gap_factor = st.number_input(
         "Gap factor (stretches positions only)", value=1.0, min_value=1.0, step=0.1,
