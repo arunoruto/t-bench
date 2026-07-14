@@ -25,6 +25,12 @@ dashboard = ["streamlit>=1.28", "pandas>=2.0", "plotly>=5.0"]
 # rather than either tool depending on t-bench).
 pymstm = { path = "../pyMSTM", editable = true }
 pyfastmm = { path = "../pyFaSTMM", editable = true }
+# refidxdb is independently published on PyPI (unlike pymstm/pyfastmm),
+# but pinned to the local checkout for now since sweep.py's catalog-based
+# material picker depends on RefIdx.catalog()/Aria.catalog(), added to
+# refidxdb alongside this feature and not yet released. Safe to drop back
+# to a version pin once that release goes out.
+refidxdb = { path = "../refidxdb", editable = true }
 
 [tool.uv]
 # Same reasoning as pymstm's/pyfastmm's own pyproject.toml: meson-python's

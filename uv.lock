@@ -1144,7 +1144,7 @@ wheels = [
 [[package]]
 name = "refidxdb"
 version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../refidxdb" }
 dependencies = [
     { name = "click" },
     { name = "numpy" },
@@ -1157,9 +1157,27 @@ dependencies = [
     { name = "streamlit" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/78/60a2daa7cb2d5b25749d09ba29227142cf42c9d707fa26466954f6c92af2/refidxdb-1.0.0.tar.gz", hash = "sha256:da088b827f8def23cf997a1454902e5d2bdb36a74fe939acb5f13b841d59b1b7", size = 12822, upload-time = "2026-07-13T16:14:36.957Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/2f/18304a79417296009f04e0aa91c240ec33d199b7d8a8fa86d33aeca8a2a0/refidxdb-1.0.0-py3-none-any.whl", hash = "sha256:037fab2834acd2b988c993ee278e912edded1a721b38ec9d6bff61e2533b88aa", size = 17510, upload-time = "2026-07-13T16:14:36Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.7" },
+    { name = "numpy", specifier = ">=1.26.4" },
+    { name = "plotext", specifier = ">=5.2.8" },
+    { name = "plotly", specifier = ">=5.24.1" },
+    { name = "polars", specifier = ">=1.12.0" },
+    { name = "pydantic", specifier = ">=2.9.2" },
+    { name = "python-semantic-release", marker = "extra == 'build'", specifier = "~=10.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "rich", specifier = ">=13.8.1" },
+    { name = "streamlit", specifier = ">=1.40.1" },
+    { name = "tqdm", specifier = ">=4.66.5" },
+]
+provides-extras = ["build"]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "pytest", specifier = ">=8.3.3" },
+    { name = "pytest-cov", specifier = ">=5.0.0" },
 ]
 
 [[package]]
@@ -1393,7 +1411,7 @@ requires-dist = [
     { name = "pymstm", editable = "../pyMSTM" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7" },
     { name = "pytest-cov", marker = "extra == 'dev'" },
-    { name = "refidxdb", specifier = ">=1.0.0" },
+    { name = "refidxdb", editable = "../refidxdb" },
     { name = "streamlit", marker = "extra == 'dashboard'", specifier = ">=1.28" },
 ]
 provides-extras = ["dev", "dashboard"]

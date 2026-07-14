@@ -13,7 +13,7 @@ radii must also be in micrometers for the resulting wavenumber
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -27,25 +27,43 @@ class MaterialSpec(BaseModel):
     index or a refidxdb-backed dispersive lookup. Applied uniformly to
     every sphere in a sweep (a benchmark cluster is assumed to be one
     material) -- per-sphere materials aren't supported by SweepRequest;
-    build a list[ClusterRequest] by hand for that."""
+    build a list[ClusterRequest] by hand for that.
+
+    Exactly one of the following must be given:
+      - refractive_index: a fixed (n, k)
+      - refidxdb_source + refidxdb_catalog_path: a refidxdb database name
+        ("refidx" or "aria") plus a cache-relative path -- normally taken
+        straight from that database's own catalog() (see
+        refidxdb.DATABASES[source].catalog()), which is what the
+        dashboard's material picker uses so users choose from a real,
+        browsable list instead of typing a URL freehand.
+      - refidxdb_url: a refractiveindex.info or eodg.atm.ox.ac.uk (ARIA)
+        URL, routed through refidxdb.Handler -- kept for scripts that
+        already have a URL on hand (e.g. copied from the website).
+      - refidxdb_path: a local .csv or .dat file in refidxdb's own
+        generic format (not a raw refractiveindex.info .yml -- those
+        need refidxdb_source+refidxdb_catalog_path or refidxdb_url
+        instead, same restriction refidxdb.Handler itself has).
+    """
 
     refractive_index: tuple[float, float] | None = None
+    refidxdb_source: Literal["refidx", "aria"] | None = None
+    refidxdb_catalog_path: str | None = None
     refidxdb_url: str | None = None
-    """A refractiveindex.info or eodg.atm.ox.ac.uk (ARIA) URL, e.g.
-    "https://refractiveindex.info/database/data/main/SiO2/nk/Rodriguez-de%20Marcos.yml"
-    -- routed through refidxdb.Handler, confirmed against real cached
-    data (SiO2 at 0.5/1.0um gives n~1.468/1.459, correct for fused silica)."""
     refidxdb_path: str | None = None
-    """A local .csv or .dat file in refidxdb's own generic format (not a
-    raw refractiveindex.info .yml -- those need refidxdb_url instead,
-    same restriction refidxdb.Handler itself has)."""
 
     @model_validator(mode="after")
     def _check_one_source(self) -> MaterialSpec:
-        sources = (self.refractive_index, self.refidxdb_url, self.refidxdb_path)
+        if (self.refidxdb_source is None) != (self.refidxdb_catalog_path is None):
+            raise ValueError(
+                "refidxdb_source and refidxdb_catalog_path must be given together"
+            )
+        catalog_source = self.refidxdb_source is not None
+        sources = (self.refractive_index, catalog_source or None, self.refidxdb_url, self.refidxdb_path)
         if sum(s is not None for s in sources) != 1:
             raise ValueError(
-                "Specify exactly one of refractive_index, refidxdb_url, refidxdb_path"
+                "Specify exactly one of refractive_index, "
+                "(refidxdb_source + refidxdb_catalog_path), refidxdb_url, refidxdb_path"
             )
         return self
 
@@ -57,6 +75,12 @@ class MaterialSpec(BaseModel):
         if self.refractive_index is not None:
             n, k = self.refractive_index
             return np.full(wavelengths_um.shape, complex(n, k))
+
+        if self.refidxdb_source is not None:
+            from refidxdb import DATABASES
+
+            source = DATABASES[self.refidxdb_source](path=self.refidxdb_catalog_path)
+            return source.interpolate(target=wavelengths_um, as_complex=True)
 
         from refidxdb import Handler
 

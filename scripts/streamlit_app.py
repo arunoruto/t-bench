@@ -15,6 +15,7 @@ there); settings live in a row above a divider, full-width plots below.
 
 from __future__ import annotations
 
+import re
 import tempfile
 from pathlib import Path
 
@@ -22,8 +23,22 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from refidxdb import DATABASES
 
 from tbench import ALL_ADAPTERS, MaterialSpec, SweepRequest, load_positions, run_sweep
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_html(text: str) -> str:
+    """refractiveindex.info's catalog names use HTML for chemical-formula
+    subscripts (e.g. "SiO<sub>2</sub>") -- strip tags for plain-text display."""
+    return _HTML_TAG_RE.sub("", text)
+
+
+@st.cache_data(show_spinner="Loading catalog...")
+def _load_catalog(db_name: str):
+    return DATABASES[db_name].catalog()
 
 # One color per *tool* (not per adapter) -- the Python wrapper and the
 # CLI binary of the same tool share a color, python drawn as a line, CLI
@@ -77,7 +92,7 @@ st.caption(f"{positions.shape[0]} spheres loaded.")
 
 st.subheader("Material")
 material_mode = st.radio(
-    "Source", ["Fixed refractive index", "refidxdb URL"], horizontal=True,
+    "Source", ["Fixed refractive index", "refidxdb database"], horizontal=True,
 )
 if material_mode == "Fixed refractive index":
     mc1, mc2 = st.columns(2)
@@ -85,11 +100,27 @@ if material_mode == "Fixed refractive index":
     n_im = mc2.number_input("n (imag)", value=0.01, step=0.01, format="%.4f")
     material = MaterialSpec(refractive_index=(n_re, n_im))
 else:
-    refidxdb_url = st.text_input(
-        "refidxdb URL (refractiveindex.info or eodg.atm.ox.ac.uk)",
-        value="https://refractiveindex.info/database/data/main/SiO2/nk/Rodriguez-de%20Marcos.yml",
-    )
-    material = MaterialSpec(refidxdb_url=refidxdb_url) if refidxdb_url else None
+    db_choice = st.selectbox("Database", list(DATABASES.keys()), format_func=str.upper)
+    try:
+        catalog_entries = _load_catalog(db_choice)
+    except FileNotFoundError as exc:
+        st.error(f"{exc}\n\nRun `refidxdb db --download {db_choice}` first.")
+        catalog_entries = []
+
+    if catalog_entries:
+        entry = st.selectbox(
+            f"Material ({len(catalog_entries)} available -- type to search)",
+            catalog_entries,
+            format_func=lambda e: _strip_html(e.label),
+        )
+        material = MaterialSpec(refidxdb_source=db_choice, refidxdb_catalog_path=entry.path)
+        st.caption(
+            "Some entries only provide n or only k (common for materials that "
+            "are transparent, i.e. non-absorbing, over their measured range) -- "
+            "if results come out NaN, pick a dataset that covers both."
+        )
+    else:
+        material = None
 
 st.subheader("Wavelength range and solver settings")
 w1, w2, w3, w4 = st.columns(4)
@@ -202,23 +233,46 @@ if "tbench_results" in st.session_state:
     st.plotly_chart(fig_time, width="stretch")
 
     with st.expander("Results table and accuracy", expanded=True):
+        # Cext can legitimately span many orders of magnitude depending on
+        # cluster scale/wavelength (e.g. sub-picometer^2 for a cluster
+        # scaled to tens-of-nm particles) -- round(x, 6) silently displayed
+        # anything below 1e-6 as a bare "0", which is exactly what a user
+        # ran into. Values stay full-precision floats; only the *display*
+        # goes through NumberColumn's scientific-notation format, so the
+        # table stays sortable/exportable as real numbers.
         rows = []
+        cext_cols = []
+        time_cols = []
         for i, wl in enumerate(wl_um):
-            row: dict[str, object] = {"wavelength_um": round(float(wl), 4)}
+            row: dict[str, object] = {"wavelength_um": float(wl)}
             c_ext_values = []
             for adapter_name, adapter_results in results.items():
                 r = adapter_results[i]
+                cext_col, time_col = f"{adapter_name} Cext", f"{adapter_name} time (s)"
+                cext_cols.append(cext_col)
+                time_cols.append(time_col)
                 if r is None:
-                    row[f"{adapter_name} Cext"] = None
-                    row[f"{adapter_name} time (s)"] = None
+                    row[cext_col] = None
+                    row[time_col] = None
                 else:
-                    row[f"{adapter_name} Cext"] = round(r.c_ext, 6)
-                    row[f"{adapter_name} time (s)"] = round(r.wall_time_seconds, 4)
+                    row[cext_col] = r.c_ext
+                    row[time_col] = r.wall_time_seconds
                     c_ext_values.append(r.c_ext)
             if len(c_ext_values) >= 2:
-                spread = (max(c_ext_values) - min(c_ext_values)) / max(c_ext_values) * 100
-                row["max Cext spread (%)"] = round(spread, 3)
+                row["max Cext spread (%)"] = (
+                    (max(c_ext_values) - min(c_ext_values)) / max(c_ext_values) * 100
+                )
             rows.append(row)
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+        column_config = {"wavelength_um": st.column_config.NumberColumn(format="%.4g")}
+        for col in set(cext_cols):
+            column_config[col] = st.column_config.NumberColumn(format="scientific")
+        for col in set(time_cols):
+            column_config[col] = st.column_config.NumberColumn(format="%.4f")
+        column_config["max Cext spread (%)"] = st.column_config.NumberColumn(format="%.3f")
+
+        st.dataframe(
+            pd.DataFrame(rows), width="stretch", hide_index=True, column_config=column_config,
+        )
 else:
     st.info("Configure a cluster, material, and wavelength range above, then click **Run Benchmark**.")
