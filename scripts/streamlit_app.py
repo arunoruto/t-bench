@@ -147,6 +147,38 @@ formulation = w4.selectbox(
 )
 mlfmm_accuracy = w4.slider("FaSTMM2 MLFMM accuracy (digits)", 1, 6, 2)
 
+if material is not None and st.checkbox(
+    "Preview refractive index n(lambda), k(lambda) for the selected material"
+):
+    with st.expander("Refractive index preview", expanded=True):
+        preview_wl = np.linspace(wl_start, wl_stop, max(int(wl_num), 100))
+        try:
+            nk = material.refractive_index_at(preview_wl)
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Failed to evaluate refractive index: {exc}")
+        else:
+            fig_nk = go.Figure()
+            fig_nk.add_trace(go.Scatter(
+                x=preview_wl, y=nk.real, name="n", mode="lines", line=dict(color="#1f77b4"),
+            ))
+            fig_nk.add_trace(go.Scatter(
+                x=preview_wl, y=nk.imag, name="k", mode="lines", line=dict(color="#d62728"),
+                yaxis="y2",
+            ))
+            fig_nk.update_layout(
+                xaxis_title="Wavelength (um)",
+                yaxis=dict(title="n", color="#1f77b4"),
+                yaxis2=dict(title="k", overlaying="y", side="right", color="#d62728"),
+                height=350,
+            )
+            st.plotly_chart(fig_nk, width="stretch")
+            if np.isnan(nk).any():
+                st.warning(
+                    "Some points are NaN -- either this dataset only covers n or "
+                    "only k, or the wavelength range extends outside what it "
+                    "measures. A benchmark run will fail at those wavelengths."
+                )
+
 st.subheader("Adapters to run")
 adapter_instances = [cls() for cls in ALL_ADAPTERS]
 adapter_cols = st.columns(len(adapter_instances))
