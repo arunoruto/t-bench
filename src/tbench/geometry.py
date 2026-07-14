@@ -26,9 +26,16 @@ def load_positions(
     stripped automatically) and comma-separated (.csv) files.
 
     *scale* multiplies every column (use to convert the file's own units
-    to the length unit the rest of a benchmark run assumes, e.g.
-    micrometers). *gap_factor* additionally stretches only the positions
-    (not radii), to separate touching spheres if needed.
+    to **micrometers** -- the length unit the rest of a benchmark run
+    assumes, matching sweep.py's wavelengths_um). Pick *scale* to convert
+    to micrometers specifically, not SI meters: nanometers -> 1e-3,
+    angstroms -> 1e-4, millimeters -> 1e3. A common mistake is using the
+    nm-to-meters factor (1e-9) instead of nm-to-micrometers (1e-3) --
+    that under-scales radii by another 1e-6 and drives the resulting size
+    parameter (wavenumber * radius) low enough to crash MSTM (see
+    adapters/mstm_python.py's MIN_SIZE_PARAMETER). *gap_factor*
+    additionally stretches only the positions (not radii), to separate
+    touching spheres if needed.
     """
     suffix = Path(path).suffix.lower()
     if suffix == ".csv":

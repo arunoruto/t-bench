@@ -9,6 +9,17 @@ refractiveindex.info data -- SiO2 at target=[0.5, 1.0] gives n~1.468/
 1.459, correct for fused silica in that range) -- so cluster coords/
 radii must also be in micrometers for the resulting wavenumber
 (k = 2*pi/wavelength_um) to be dimensionally consistent with them.
+
+Both sides are bare numbers meant as micrometers, not SI meters -- a
+wavelengths_um entry of 0.5 means 0.5 um, not 0.5 m, and coords/radii
+need the matching micrometers scale (see geometry.py's load_positions
+docstring for common source-unit conversions, e.g. nm -> 1e-3, not the
+SI nm -> meters factor of 1e-9). Getting this wrong on only one side
+(e.g. scaling radii to meters while wavelengths stay in micrometers)
+silently produces a wavenumber * radius size parameter that's off by
+whatever power of ten was missed -- if it lands far enough below 1,
+MSTM crashes the whole process rather than raising a normal error (see
+adapters/mstm_python.py's MIN_SIZE_PARAMETER guard).
 """
 
 from __future__ import annotations
