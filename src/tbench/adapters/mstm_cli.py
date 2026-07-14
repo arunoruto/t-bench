@@ -56,8 +56,11 @@ class MstmCliAdapter(ScattererAdapter):
             wall_time = time.perf_counter() - t0
             parsed = parse_mstm_output(os.path.join(tmp, out_name))
 
+        # r_cs is in the same k-scaled coordinate system as scaled_radii --
+        # divide back by k before squaring to get a physical cross
+        # section, matching MstmPythonAdapter's fix (see its comment).
         r_cs = sum(r**3 for r in scaled_radii) ** (1 / 3)
-        area = 3.141592653589793 * r_cs**2
+        area = 3.141592653589793 * (r_cs / k) ** 2
         total = parsed["total"]
         return ScatterResult(
             tool="mstm", backend="cli", adapter_name=self.name,

@@ -62,3 +62,35 @@ def test_all_available_adapters_agree_on_cross_sections():
     c_ext_values = [r.c_ext for r in results]
     spread = (max(c_ext_values) - min(c_ext_values)) / max(c_ext_values)
     assert spread < 0.01, f"Cext disagreement too large: {dict(zip((r.adapter_name for r in results), c_ext_values))}"
+
+
+def test_mstm_matches_fastmm2_at_nontrivial_wavenumber():
+    """Regression test for a real bug: MstmPythonAdapter/MstmCliAdapter
+    convert MSTM's dimensionless efficiencies to physical cross sections
+    via a cross-section radius that MSTM reports in the same k-scaled
+    (size-parameter) coordinate system it was given (scaled_radii = k *
+    request.radii) -- forgetting to divide that radius back by k before
+    squaring made cross sections wrong by a factor of k**2 for any
+    k != 1.0. The bug hid in test_all_available_adapters_agree_on_cross_sections
+    above because that test happens to use k=1.0 (a no-op division).
+    Found via a real SweepRequest at k=2*pi/0.5um=12.566 (1um-radius
+    spheres at 0.5um wavelength), where MSTM's Cext came out ~160x
+    FaSTMM2's for the identical physical problem -- same radii, same
+    wavenumber, only the *conversion* to a physical cross section was
+    wrong. Same two spheres as the other tests here, just at k != 1.0.
+    """
+    mstm = MstmPythonAdapter()
+    fastmm2 = Fastmm2PythonAdapter()
+    if not (mstm.is_available() and fastmm2.is_available()):
+        pytest.skip("need both mstm-python and fastmm2-python available")
+
+    request = ClusterRequest(
+        coords=[(-1.5, 0.0, 0.0), (1.5, 0.0, 0.0)], radii=[1.0, 1.0],
+        refractive_index=[(1.5, 0.01), (1.5, 0.01)],
+        wavenumber=2 * 3.141592653589793 / 0.5,  # k for a 0.5um wavelength
+        n_theta=19, n_phi=1, tolerance=1e-4, max_iterations=500,
+    )
+
+    r_mstm = mstm.solve(request)
+    r_fastmm2 = fastmm2.solve(request)
+    assert r_mstm.c_ext == pytest.approx(r_fastmm2.c_ext, rel=0.05)

@@ -53,7 +53,16 @@ class MstmPythonAdapter(ScattererAdapter):
             m.finalize()
         wall_time = time.perf_counter() - t0
 
-        area = 3.141592653589793 * r_cs**2
+        # r_cs is in the same k-scaled (size-parameter) coordinate system
+        # as scaled_radii/scaled_positions -- Q_ext etc. are dimensionless
+        # efficiencies (fine as-is), but converting to a *physical* cross
+        # section needs r_cs divided back by k first. Confirmed the bug
+        # this fixes: without the /k, a k=1.0 sanity case looks right by
+        # coincidence (dividing by 1 is a no-op) but a k=12.57 case (0.5um
+        # wavelength, 1um-radius spheres) was off by a factor of k**2
+        # (~158x), producing Cext=2632 instead of the ~16 FaSTMM2 computes
+        # for the identical physical problem.
+        area = 3.141592653589793 * (r_cs / k) ** 2
         return ScatterResult(
             tool="mstm", backend="python", adapter_name=self.name,
             c_ext=float(raw["qext_tot"]) * area,
