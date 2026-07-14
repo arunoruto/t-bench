@@ -2,6 +2,22 @@
 inputs:
   nixpkgs:
     url: github:nixos/nixpkgs/nixos-unstable
+  # pymstm/pyfastmm's own flake.nix now expose the mstm/fastmm2 CLI
+  # reference binaries (see devenv.nix) -- pulled in here instead of
+  # t-bench maintaining its own duplicate nix/packages/{mstm,fastmm2}
+  # derivations. `inputs.nixpkgs.follows: nixpkgs` points both at this
+  # devenv's own nixpkgs rather than each fetching/evaluating their own
+  # pinned copy.
+  pymstm:
+    url: github:arunoruto/pyMSTM
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+  pyfastmm:
+    url: github:arunoruto/pyFaSTMM
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
 
 # If you're using non-OSS software, you can set allow_unfree to true.
 # allow_unfree: true

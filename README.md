@@ -119,10 +119,11 @@ all of them side by side.
 
 ## Setup
 
-Requires the `mstm`/`FaSTMM2` CLI binaries on `PATH` (built by
-`nix/packages/*/package.nix`, pulled in automatically inside the `devenv`
-shell) and `../pyMSTM`/`../pyFaSTMM` checked out as sibling directories
-(path dependencies -- see `pyproject.toml`).
+Requires the `mstm`/`FaSTMM2` CLI binaries on `PATH` (built by pyMSTM's/
+pyFaSTMM's own flakes, pulled in via `devenv.yaml`'s `pymstm`/`pyfastmm`
+inputs and put on PATH automatically inside the `devenv` shell) and
+`../pyMSTM`/`../pyFaSTMM` checked out as sibling directories (path
+dependencies -- see `pyproject.toml`).
 
 ```bash
 devenv shell   # builds both CLIs and both Python packages

@@ -17,6 +17,40 @@
         "type": "github"
       }
     },
+    "fastmm2-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1781010177,
+        "narHash": "sha256-pBWNXhEJhrfmoZJctI38Zafg88uIPEkc1ePbRIoxQcI=",
+        "ref": "refs/heads/main",
+        "rev": "4b56dc5b30333f3358e205ba8f88a03ee4d2bb3b",
+        "revCount": 4,
+        "type": "git",
+        "url": "https://bitbucket.org/planetarysystemresearch/fastmm2"
+      },
+      "original": {
+        "rev": "4b56dc5b30333f3358e205ba8f88a03ee4d2bb3b",
+        "type": "git",
+        "url": "https://bitbucket.org/planetarysystemresearch/fastmm2"
+      }
+    },
+    "mstm-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1707426109,
+        "narHash": "sha256-IjCYT6+fAS9Fysn/+v7CzpaUewPqT6k62HaevSBVp6g=",
+        "owner": "dmckwski",
+        "repo": "MSTM",
+        "rev": "a0c982121cf9ac352531f4816639a07d814385bd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dmckwski",
+        "repo": "MSTM",
+        "rev": "a0c982121cf9ac352531f4816639a07d814385bd",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1783224372,
@@ -33,10 +67,54 @@
         "type": "github"
       }
     },
+    "pyfastmm": {
+      "inputs": {
+        "fastmm2-src": "fastmm2-src",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784058952,
+        "narHash": "sha256-GSiAdPZ7Pv9RP5QDUHXi4tKtu6BWkZg+j/63sZYbBvg=",
+        "owner": "arunoruto",
+        "repo": "pyFaSTMM",
+        "rev": "ae7d586aad91efaa3cdbad9bd2336c5df5b35226",
+        "type": "github"
+      },
+      "original": {
+        "owner": "arunoruto",
+        "repo": "pyFaSTMM",
+        "type": "github"
+      }
+    },
+    "pymstm": {
+      "inputs": {
+        "mstm-src": "mstm-src",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784058934,
+        "narHash": "sha256-U4JOMJXowWhiBaO4xcJQJn+SIo6gsCum/vbmp1Uf4x8=",
+        "owner": "arunoruto",
+        "repo": "pyMSTM",
+        "rev": "d8f2c9c9ccc627f1c61d73ca4e0b798a8c38cea7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "arunoruto",
+        "repo": "pyMSTM",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "devenv": "devenv",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "pyfastmm": "pyfastmm",
+        "pymstm": "pymstm"
       }
     }
   },

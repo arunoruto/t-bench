@@ -1,19 +1,23 @@
 {
   pkgs,
+  inputs,
   ...
 }:
 {
-  # The mstm/FaSTMM2 CLI binaries (built by the two derivations below, from
-  # the exact same pinned commits pyMSTM's/pyFaSTMM's own flake.nix use)
-  # land directly on PATH -- MstmCliAdapter/Fastmm2CliAdapter just shell
-  # out to them by name. gfortran/lapack/blas are also needed here (in
-  # addition to those two derivations) to build pymstm's and pyfastmm's
-  # own compiled f2py extensions, since both are pulled in as local path
-  # dependencies (see pyproject.toml's [tool.uv.sources]) and get built
-  # by this project's own `uv sync`, not by their own devenv shells.
+  # The mstm/FaSTMM2 CLI reference binaries land directly on PATH --
+  # MstmCliAdapter/Fastmm2CliAdapter just shell out to them by name.
+  # Built by pyMSTM's/pyFaSTMM's own flake.nix (see devenv.yaml's pymstm/
+  # pyfastmm inputs) rather than duplicating that packaging here --
+  # t-bench previously carried its own copy of these derivations under
+  # nix/packages/, now removed in favor of the upstream ones. gfortran/
+  # lapack/blas are also needed here (separately from those two
+  # derivations) to build pymstm's and pyfastmm's own compiled f2py
+  # extensions, since both are pulled in as local path dependencies (see
+  # pyproject.toml's [tool.uv.sources]) and get built by this project's
+  # own `uv sync`, not by their own devenv shells.
   packages = [
-    (pkgs.callPackage ./nix/packages/mstm/package.nix { })
-    (pkgs.callPackage ./nix/packages/fastmm2/package.nix { })
+    inputs.pymstm.packages.${pkgs.system}.mstm
+    inputs.pyfastmm.packages.${pkgs.system}.fastmm2
     pkgs.gfortran
     pkgs.lapack
     pkgs.blas
