@@ -10,8 +10,10 @@ from tbench.adapters import (
     MstmPythonAdapter,
     ScattererAdapter,
 )
-from tbench.runner import run_benchmark
+from tbench.geometry import load_positions
+from tbench.runner import run_benchmark, run_sweep
 from tbench.schema import ClusterRequest, ScatterResult
+from tbench.sweep import MaterialSpec, SweepRequest, expand_sweep
 
 __all__ = [
     "ClusterRequest",
@@ -23,5 +25,10 @@ __all__ = [
     "Fastmm2CliAdapter",
     "ALL_ADAPTERS",
     "run_benchmark",
+    "run_sweep",
+    "load_positions",
+    "MaterialSpec",
+    "SweepRequest",
+    "expand_sweep",
 ]
 __version__ = "0.1.0"
