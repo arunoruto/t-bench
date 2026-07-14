@@ -1,0 +1,87 @@
+{
+  "nodes": {
+    "fastmm2-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1781010177,
+        "narHash": "sha256-pBWNXhEJhrfmoZJctI38Zafg88uIPEkc1ePbRIoxQcI=",
+        "ref": "refs/heads/main",
+        "rev": "4b56dc5b30333f3358e205ba8f88a03ee4d2bb3b",
+        "revCount": 4,
+        "type": "git",
+        "url": "https://bitbucket.org/planetarysystemresearch/fastmm2"
+      },
+      "original": {
+        "rev": "4b56dc5b30333f3358e205ba8f88a03ee4d2bb3b",
+        "type": "git",
+        "url": "https://bitbucket.org/planetarysystemresearch/fastmm2"
+      }
+    },
+    "mstm-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1707426109,
+        "narHash": "sha256-IjCYT6+fAS9Fysn/+v7CzpaUewPqT6k62HaevSBVp6g=",
+        "owner": "dmckwski",
+        "repo": "MSTM",
+        "rev": "a0c982121cf9ac352531f4816639a07d814385bd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dmckwski",
+        "repo": "MSTM",
+        "rev": "a0c982121cf9ac352531f4816639a07d814385bd",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1783856661,
+        "narHash": "sha256-ZGP04e+Q6WyQJGA9ZvI5CL6+heGQldbAG9U1T9NGvmU=",
+        "rev": "569d578509928497eddc3fdbf94a799027050be4",
+        "revCount": 1009099,
+        "type": "tarball",
+        "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.2605.1009099%2Brev-569d578509928497eddc3fdbf94a799027050be4/019f5cad-5e88-7e03-b203-dd0a214787c3/source.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://flakehub.com/f/NixOS/nixpkgs/0"
+      }
+    },
+    "pyfastmm-repo": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-86m0nNIL99cnVPA+6yH+mZ0aJ9ANDitjtUSM5rYzuKE=",
+        "path": "/home/mar/Development/pyFaSTMM",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/mar/Development/pyFaSTMM",
+        "type": "path"
+      }
+    },
+    "pymstm-repo": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-1ouRg3S0edbfjVUYqSbVHY4TGHKgyVsckW/Zll7ryaE=",
+        "path": "/home/mar/Development/pyMSTM",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/mar/Development/pyMSTM",
+        "type": "path"
+      }
+    },
+    "root": {
+      "inputs": {
+        "fastmm2-src": "fastmm2-src",
+        "mstm-src": "mstm-src",
+        "nixpkgs": "nixpkgs",
+        "pyfastmm-repo": "pyfastmm-repo",
+        "pymstm-repo": "pymstm-repo"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
