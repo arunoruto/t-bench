@@ -209,6 +209,39 @@ if material is not None and st.checkbox(
                     "measures. A benchmark run will fail at those wavelengths."
                 )
 
+with st.expander("Inspect raw inputs (wavelengths + scaled positions)"):
+    st.caption(
+        "Exactly what gets handed to the adapters -- the wavelength array "
+        "from the range/steps above, and the position file's columns "
+        "after `Scale`/`Gap factor` (above, in the Cluster section) have "
+        "already been applied. Use this to sanity-check sizes/units "
+        "before running."
+    )
+    wl_array = np.linspace(wl_start, wl_stop, int(wl_num))
+    st.write(f"**Wavelengths (um)**, {len(wl_array)} steps:")
+    st.dataframe(
+        pd.DataFrame({"wavelength_um": wl_array}), width="stretch", hide_index=True,
+        column_config={"wavelength_um": st.column_config.NumberColumn(format="%.6g")},
+    )
+    st.write(
+        f"**Scaled positions** ({positions.shape[0]} spheres, x/y/z/radius, "
+        f"same units as the wavelengths above):"
+    )
+    st.caption(
+        f"radius: min={positions[:, 3].min():.6g}, max={positions[:, 3].max():.6g}  |  "
+        f"bounding box extent: "
+        f"x=[{positions[:, 0].min():.6g}, {positions[:, 0].max():.6g}], "
+        f"y=[{positions[:, 1].min():.6g}, {positions[:, 1].max():.6g}], "
+        f"z=[{positions[:, 2].min():.6g}, {positions[:, 2].max():.6g}]"
+    )
+    st.dataframe(
+        pd.DataFrame(positions, columns=["x", "y", "z", "radius"]),
+        width="stretch", hide_index=True,
+        column_config={
+            c: st.column_config.NumberColumn(format="%.6g") for c in ["x", "y", "z", "radius"]
+        },
+    )
+
 st.subheader("Adapters to run")
 adapter_instances = [
     Fastmm2CliAdapter(omp_num_threads=int(omp_num_threads) or None)
