@@ -54,6 +54,23 @@ class ClusterRequest(BaseModel):
     tolerance: float = 1e-4
     max_iterations: int = 2000
 
+    mstm_mie_eps: float = 1e-10
+    """MSTM-only: per-sphere Mie coefficient convergence tolerance.
+    Tighter than pymstm's own library default (1e-6) -- confirmed needed
+    for touching/near-touching spheres deep in the Rayleigh regime (e.g.
+    a fractal aggregate at nanometer particle scale), where the default
+    under-truncates near-field coupling badly enough to flip Csca's sign
+    relative to FaSTMM2's independent computation. See mstm_translation_eps."""
+    mstm_translation_eps: float = 1e-8
+    """MSTM-only: translation-addition-theorem convergence tolerance
+    (controls near-field coupling accuracy between spheres, as distinct
+    from mstm_mie_eps's per-sphere truncation). Tighter than pymstm's own
+    library default (1e-5) for the same touching-sphere reason as
+    mstm_mie_eps -- tightening both moved a real test case's Cext
+    discrepancy against FaSTMM2 from ~25% to ~12% and fixed Csca's sign;
+    going tighter still (1e-12/1e-10) changed nothing further, i.e. this
+    already converges. Ignored by FaSTMM2."""
+
     formulation: int = 2
     """FaSTMM2-only: 0=STMM, 1=FaSTMM, 2=FaSTMM2 (MLFMM). Ignored by MSTM."""
     mlfmm_accuracy: int = 2

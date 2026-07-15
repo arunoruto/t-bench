@@ -1,6 +1,8 @@
 """Adapter tests -- each skips automatically if its tool isn't available
 (binary not on PATH, or the Python package failed to build)."""
 
+import os
+
 import pytest
 
 from tbench.adapters import (
@@ -10,7 +12,10 @@ from tbench.adapters import (
     MstmPythonAdapter,
 )
 from tbench.adapters.mstm_python import MIN_SIZE_PARAMETER, check_size_parameters
+from tbench.geometry import load_positions
 from tbench.schema import ClusterRequest
+
+_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 _TWO_SPHERES = ClusterRequest(
     coords=[(-1.5, 0.0, 0.0), (1.5, 0.0, 0.0)],
@@ -130,3 +135,45 @@ def test_mstm_adapter_rejects_pathologically_small_particles(adapter_cls):
     )
     with pytest.raises(ValueError, match="below MSTM's known-crashing threshold"):
         adapter.solve(request)
+
+
+def test_mstm_fastmm2_agreement_on_touching_sphere_cluster():
+    """The other agreement tests above use two well-separated spheres,
+    which never exercises MSTM's near-field truncation defaults the way
+    a real aggregate does. This loads a 32-sphere fractal aggregate
+    (touching spheres -- generated with tol_ov=1e-6, see the file's own
+    header) at a size parameter deep in the Rayleigh regime, the exact
+    kind of case that surfaced a real ~25% Cext disagreement and a
+    sign-flipped Csca between MSTM and FaSTMM2 before mstm_mie_eps/
+    mstm_translation_eps were tightened (see schema.py). Deliberately no
+    tight tolerance asserted: tightening those eps values further no
+    longer moves MSTM's answer (already converged), so some residual
+    disagreement between the two independent solvers is expected at this
+    extreme end of parameter space -- this test is for visibility into
+    how close they are, not a pass/fail accuracy gate."""
+    mstm = MstmPythonAdapter()
+    fastmm2 = Fastmm2PythonAdapter()
+    if not (mstm.is_available() and fastmm2.is_available()):
+        pytest.skip("need both mstm-python and fastmm2-python available")
+
+    positions = load_positions(os.path.join(_DATA_DIR, "fractal_N32_Df2.0.dat"))
+    n = positions.shape[0]
+    request = ClusterRequest(
+        coords=[tuple(p) for p in positions[:, :3]],
+        radii=list(positions[:, 3]),
+        refractive_index=[(1.5, 0.01)] * n,
+        wavenumber=0.05,  # deep Rayleigh (x ~ 0.05) for these touching, radius-1 spheres
+        n_theta=19, n_phi=1, tolerance=1e-4, max_iterations=500,
+    )
+
+    r_mstm = mstm.solve(request)
+    r_fastmm2 = fastmm2.solve(request)
+
+    spread = abs(r_mstm.c_ext - r_fastmm2.c_ext) / r_fastmm2.c_ext
+    print(
+        f"\nmstm:    c_ext={r_mstm.c_ext:.6e} c_abs={r_mstm.c_abs:.6e} c_sca={r_mstm.c_sca:.6e}\n"
+        f"fastmm2: c_ext={r_fastmm2.c_ext:.6e} c_abs={r_fastmm2.c_abs:.6e} c_sca={r_fastmm2.c_sca:.6e}\n"
+        f"relative Cext spread: {spread:.1%}"
+    )
+    assert r_mstm.c_ext > 0
+    assert r_fastmm2.c_ext > 0

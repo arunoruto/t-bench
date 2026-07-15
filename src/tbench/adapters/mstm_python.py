@@ -80,6 +80,8 @@ class MstmPythonAdapter(ScattererAdapter):
                 beta_deg=request.incident_polar_deg,
             )
             m.set_solver_params(eps=request.tolerance, max_iter=request.max_iterations)
+            m.set_mie_eps(request.mstm_mie_eps)
+            m.set_translation_eps(request.mstm_translation_eps)
             m.set_verbose(False)
             m.prepare()
             raw = m.solve()

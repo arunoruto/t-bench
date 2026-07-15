@@ -54,6 +54,8 @@ class MstmCliAdapter(ScattererAdapter):
                 beta_deg=request.incident_polar_deg,
                 solution_eps=request.tolerance,
                 max_iterations=request.max_iterations,
+                mie_eps=request.mstm_mie_eps,
+                translation_eps=request.mstm_translation_eps,
                 calculate_scattering_matrix=False,
                 print_sphere_data=False,
                 output_file=out_name,
