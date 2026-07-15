@@ -64,7 +64,20 @@ class Fastmm2CliAdapter(ScattererAdapter):
                 "-max_iter", str(request.max_iterations), "-S_out", s_out,
             ]
             t0 = time.perf_counter()
-            subprocess.run(args, cwd=tmp, check=True, capture_output=True)
+            # NOT capture_output=True: FaSTMM2 prints copious per-iteration
+            # diagnostics (every GMRES step, every octree/translation
+            # phase), and capture_output buffers all of it in *Python
+            # process memory*, unbounded, for the whole run -- confirmed
+            # as a real OOM crash on a genuinely hard cluster (the
+            # 128-particle fractal aggregate test file) that ground
+            # through many iterations before finishing. Neither this
+            # adapter nor its caller ever reads .stdout/.stderr (results
+            # come from the mueller.h5 output below), so there's no
+            # information loss in discarding it outright.
+            subprocess.run(
+                args, cwd=tmp, check=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
             wall_time = time.perf_counter() - t0
 
             with h5py.File(s_out) as fh:

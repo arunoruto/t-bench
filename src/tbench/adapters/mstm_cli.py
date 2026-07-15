@@ -59,8 +59,19 @@ class MstmCliAdapter(ScattererAdapter):
                 output_file=out_name,
             )
             t0 = time.perf_counter()
+            # NOT capture_output=True: mstm prints copious per-iteration
+            # diagnostics (every GMRES step, every translation/aggregation
+            # phase), and capture_output buffers all of it in *Python
+            # process memory*, unbounded, for the whole run -- confirmed
+            # as a real OOM crash on a genuinely hard cluster (the
+            # 128-particle fractal aggregate test file) that ground
+            # through many iterations before finishing. Neither this
+            # adapter nor its caller ever reads .stdout/.stderr (results
+            # come from parse_mstm_output below), so there's no
+            # information loss in discarding it outright.
             subprocess.run(
-                [self.binary_path, inp_path], cwd=tmp, check=True, capture_output=True,
+                [self.binary_path, inp_path], cwd=tmp, check=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             wall_time = time.perf_counter() - t0
             parsed = parse_mstm_output(os.path.join(tmp, out_name))
