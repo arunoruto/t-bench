@@ -177,3 +177,39 @@ def test_mstm_fastmm2_agreement_on_touching_sphere_cluster():
     )
     assert r_mstm.c_ext > 0
     assert r_fastmm2.c_ext > 0
+
+
+def test_fastmm2_incident_angle_matches_mstm_when_both_angles_nonzero():
+    """Regression test for a real bug: FaSTMM2 has no incident-angle
+    parameter of its own (always illuminates along +z), so both FaSTMM2
+    adapters rotate the cluster geometry instead and solve with the
+    fixed +z beam -- physically equivalent by rotational invariance, as
+    long as the rotation exactly inverts MSTM's own incident-wave
+    convention (mstm-input-37.f90 builds the tilted wave as
+    k_hat = Rz(alpha) . Ry(beta) . z_hat, beta about y first, then alpha
+    about z, so the geometry needs the inverse composition
+    Ry(-beta) . Rz(-alpha)). The rotation was initially implemented with
+    the two matrices composed in the opposite order (Rz(-alpha) .
+    Ry(-beta)) -- agreed with MSTM to <0.001% whenever only ONE of
+    polar/azimuthal was nonzero (a single rotation is unaffected by
+    composition order) but was off by up to ~1.3% once BOTH were
+    simultaneously nonzero, where order actually matters. A test with
+    only one nonzero angle would not have caught this."""
+    mstm = MstmPythonAdapter()
+    fastmm2 = Fastmm2PythonAdapter()
+    if not (mstm.is_available() and fastmm2.is_available()):
+        pytest.skip("need both mstm-python and fastmm2-python available")
+
+    request = ClusterRequest(
+        coords=[(-2.0, 0.3, 0.1), (2.0, -0.4, 0.2), (0.5, 2.5, -0.3)],
+        radii=[1.0, 1.0, 1.0],
+        refractive_index=[(1.5, 0.01)] * 3,
+        wavenumber=2 * 3.141592653589793 / 0.5,
+        n_theta=19, n_phi=1, tolerance=1e-8, max_iterations=2000,
+        incident_polar_deg=30.0, incident_azimuthal_deg=45.0,
+        formulation=0,  # STMM: exact, isolates the rotation from MLFMM's own error
+    )
+    r_mstm = mstm.solve(request)
+    r_fastmm2 = fastmm2.solve(request)
+    assert r_fastmm2.c_ext == pytest.approx(r_mstm.c_ext, rel=1e-3)
+    assert r_fastmm2.c_abs == pytest.approx(r_mstm.c_abs, rel=1e-3)

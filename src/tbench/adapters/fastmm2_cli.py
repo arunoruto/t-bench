@@ -13,13 +13,16 @@ import warnings
 import numpy as np
 
 from tbench.adapters.base import ScattererAdapter
+from tbench.adapters.fastmm2_python import _rotate_positions_for_incident
 from tbench.schema import ClusterRequest, ScatterResult
 
 
 class Fastmm2CliAdapter(ScattererAdapter):
     name = "fastmm2-cli"
 
-    def __init__(self, binary_path: str = "FaSTMM2", omp_num_threads: int | None = None):
+    def __init__(
+        self, binary_path: str = "FaSTMM2", omp_num_threads: int | None = None
+    ):
         self.binary_path = binary_path
         # FaSTMM2 is built with -fopenmp (see external/fastmm2/src/CMakeLists.txt);
         # None leaves OMP_NUM_THREADS unset, i.e. OpenMP's own default (usually
@@ -45,6 +48,12 @@ class Fastmm2CliAdapter(ScattererAdapter):
                 stacklevel=2,
             )
 
+        coords = _rotate_positions_for_incident(
+            request.coords,
+            request.incident_polar_deg,
+            request.incident_azimuthal_deg,
+        )
+
         n = request.n_spheres
         eps = np.array([complex(*ri) ** 2 for ri in request.refractive_index])
         n_phi = max(1, request.n_phi)
@@ -53,7 +62,7 @@ class Fastmm2CliAdapter(ScattererAdapter):
             geo_path = os.path.join(tmp, "geometry.h5")
             s_out = os.path.join(tmp, "mueller.h5")
             with h5py.File(geo_path, "w") as fh:
-                fh.create_dataset("coord", data=np.asarray(request.coords))
+                fh.create_dataset("coord", data=np.asarray(coords))
                 fh.create_dataset("radius", data=np.asarray(request.radii))
                 fh.create_dataset("param_r", data=np.real(eps))
                 fh.create_dataset("param_i", data=np.imag(eps))
@@ -61,11 +70,29 @@ class Fastmm2CliAdapter(ScattererAdapter):
                 fh.create_dataset("angles", data=np.zeros((n, 3)))
 
             args = [
-                self.binary_path, "-geometry_file", geo_path, "-k", str(request.wavenumber),
-                "-N_ave", "0", "-N_theta", str(request.n_theta), "-N_phi", str(n_phi),
-                "-formulation", str(request.formulation), "-acc", str(request.mlfmm_accuracy),
-                "-tol", str(request.tolerance), "-restart", "5",
-                "-max_iter", str(request.max_iterations), "-S_out", s_out,
+                self.binary_path,
+                "-geometry_file",
+                geo_path,
+                "-k",
+                str(request.wavenumber),
+                "-N_ave",
+                "0",
+                "-N_theta",
+                str(request.n_theta),
+                "-N_phi",
+                str(n_phi),
+                "-formulation",
+                str(request.formulation),
+                "-acc",
+                str(request.mlfmm_accuracy),
+                "-tol",
+                str(request.tolerance),
+                "-restart",
+                "5",
+                "-max_iter",
+                str(request.max_iterations),
+                "-S_out",
+                s_out,
             ]
             t0 = time.perf_counter()
             # NOT capture_output=True: FaSTMM2 prints copious per-iteration
@@ -82,8 +109,12 @@ class Fastmm2CliAdapter(ScattererAdapter):
             if self.omp_num_threads is not None:
                 env = {**os.environ, "OMP_NUM_THREADS": str(self.omp_num_threads)}
             subprocess.run(
-                args, cwd=tmp, check=True, env=env,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                args,
+                cwd=tmp,
+                check=True,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             wall_time = time.perf_counter() - t0
 
@@ -97,8 +128,12 @@ class Fastmm2CliAdapter(ScattererAdapter):
         # the matching comment in fastmm2_python.py. Use index 1 as the
         # canonical, resolution-independent c_sca for cross-tool comparison.
         return ScatterResult(
-            tool="fastmm2", backend="cli", adapter_name=self.name,
-            c_ext=float(crs[0]), c_abs=float(crs[2]), c_sca=float(crs[1]),
+            tool="fastmm2",
+            backend="cli",
+            adapter_name=self.name,
+            c_ext=float(crs[0]),
+            c_abs=float(crs[2]),
+            c_sca=float(crs[1]),
             asymmetry=float(crs[4]),
             wall_time_seconds=wall_time,
             n_spheres=n,
