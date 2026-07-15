@@ -288,6 +288,41 @@ if "tbench_results" in st.session_state:
         )
         col.plotly_chart(fig, width="stretch")
 
+    # MSTM as ground truth: prefer mstm-python (direct f2py call, no
+    # file-round-trip precision loss) over mstm-cli if both ran.
+    gt_name = next((n for n in ("mstm-python", "mstm-cli") if n in results), None)
+    if gt_name is None:
+        st.info("Select an MSTM adapter to see the error-vs-MSTM plot below.")
+    else:
+        st.subheader(f"Error vs. MSTM ground truth ({gt_name}): (val - gt) / gt")
+        gt_results = results[gt_name]
+        err_cols = st.columns(3)
+        for col, (key, label) in zip(err_cols, _QUANTITY_LABELS):
+            fig = go.Figure()
+            for adapter_name, adapter_results in results.items():
+                if adapter_name == gt_name:
+                    continue
+                tool = "mstm" if adapter_name.startswith("mstm") else "fastmm2"
+                color = _TOOL_COLORS[tool]
+                is_cli = adapter_name.endswith("cli")
+                y = []
+                for r, gt in zip(adapter_results, gt_results):
+                    if r is None or gt is None or getattr(gt, key) == 0:
+                        y.append(None)
+                    else:
+                        y.append(100 * (getattr(r, key) - getattr(gt, key)) / getattr(gt, key))
+                fig.add_trace(go.Scatter(
+                    x=wl_um, y=y, name=adapter_name,
+                    mode="markers" if is_cli else "lines+markers",
+                    line=None if is_cli else dict(color=color),
+                    marker=dict(color=color, symbol="x" if is_cli else "circle"),
+                ))
+            fig.add_hline(y=0, line=dict(color="gray", dash="dot"))
+            fig.update_layout(
+                title=label, xaxis_title="Wavelength (um)", yaxis_title="Error (%)", height=380,
+            )
+            col.plotly_chart(fig, width="stretch")
+
     st.subheader("Speed: wall-clock time vs. wavelength")
     fig_time = go.Figure()
     for adapter_name, adapter_results in results.items():
