@@ -321,13 +321,24 @@ if "tbench_results" in st.session_state:
         )
         col.plotly_chart(fig, width="stretch")
 
-    # MSTM as ground truth: prefer mstm-python (direct f2py call, no
-    # file-round-trip precision loss) over mstm-cli if both ran.
-    gt_name = next((n for n in ("mstm-python", "mstm-cli") if n in results), None)
+    err_setting_cols = st.columns(2)
+    gt_tool = err_setting_cols[0].radio(
+        "Ground truth tool", ["MSTM", "FaSTMM2"], horizontal=True,
+    )
+    error_mode = err_setting_cols[1].radio(
+        "Error type", ["Relative: (val - gt) / gt", "Ratio: val / gt"], horizontal=True,
+    )
+    # Prefer the *-python adapter (direct f2py call, no file-round-trip
+    # precision loss) over its *-cli counterpart if both ran.
+    gt_candidates = ("mstm-python", "mstm-cli") if gt_tool == "MSTM" else ("fastmm2-python", "fastmm2-cli")
+    gt_name = next((n for n in gt_candidates if n in results), None)
     if gt_name is None:
-        st.info("Select an MSTM adapter to see the error-vs-MSTM plot below.")
+        st.info(f"Select a {gt_tool} adapter to see the error plot below.")
     else:
-        st.subheader(f"Error vs. MSTM ground truth ({gt_name}): (val - gt) / gt")
+        is_relative = error_mode.startswith("Relative")
+        y_title = "Error (%)" if is_relative else "Ratio (val / gt)"
+        hline_y = 0 if is_relative else 1
+        st.subheader(f"Error vs. {gt_tool} ground truth ({gt_name}): {error_mode.split(': ', 1)[1]}")
         gt_results = results[gt_name]
         err_cols = st.columns(3)
         for col, (key, label) in zip(err_cols, _QUANTITY_LABELS):
@@ -342,17 +353,19 @@ if "tbench_results" in st.session_state:
                 for r, gt in zip(adapter_results, gt_results):
                     if r is None or gt is None or getattr(gt, key) == 0:
                         y.append(None)
-                    else:
+                    elif is_relative:
                         y.append(100 * (getattr(r, key) - getattr(gt, key)) / getattr(gt, key))
+                    else:
+                        y.append(getattr(r, key) / getattr(gt, key))
                 fig.add_trace(go.Scatter(
                     x=wl_um, y=y, name=adapter_name,
                     mode="markers" if is_cli else "lines+markers",
                     line=None if is_cli else dict(color=color),
                     marker=dict(color=color, symbol="x" if is_cli else "circle"),
                 ))
-            fig.add_hline(y=0, line=dict(color="gray", dash="dot"))
+            fig.add_hline(y=hline_y, line=dict(color="gray", dash="dot"))
             fig.update_layout(
-                title=label, xaxis_title="Wavelength (um)", yaxis_title="Error (%)", height=380,
+                title=label, xaxis_title="Wavelength (um)", yaxis_title=y_title, height=380,
             )
             col.plotly_chart(fig, width="stretch")
 
