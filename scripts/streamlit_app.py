@@ -26,6 +26,7 @@ import streamlit as st
 from refidxdb import DATABASES
 
 from tbench import ALL_ADAPTERS, MaterialSpec, SweepRequest, load_positions, run_sweep
+from tbench.adapters.fastmm2_cli import Fastmm2CliAdapter
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
@@ -146,6 +147,15 @@ formulation = w4.selectbox(
     format_func=lambda v: {0: "STMM", 1: "FaSTMM", 2: "FaSTMM2"}[v], index=2,
 )
 mlfmm_accuracy = w4.slider("FaSTMM2 MLFMM accuracy (digits)", 1, 6, 2)
+omp_num_threads = w4.number_input(
+    "fastmm2-cli OMP_NUM_THREADS (0 = default)", value=0, min_value=0, step=1,
+    help=(
+        "FaSTMM2 is built with OpenMP. Only affects fastmm2-cli (a separate "
+        "process); fastmm2-python runs in this process and isn't repinned. "
+        "0 leaves OMP_NUM_THREADS unset, i.e. OpenMP's own default (usually "
+        "all visible cores)."
+    ),
+)
 
 if material is not None and st.checkbox(
     "Preview refractive index n(lambda), k(lambda) for the selected material"
@@ -180,7 +190,11 @@ if material is not None and st.checkbox(
                 )
 
 st.subheader("Adapters to run")
-adapter_instances = [cls() for cls in ALL_ADAPTERS]
+adapter_instances = [
+    Fastmm2CliAdapter(omp_num_threads=int(omp_num_threads) or None)
+    if cls is Fastmm2CliAdapter else cls()
+    for cls in ALL_ADAPTERS
+]
 adapter_cols = st.columns(len(adapter_instances))
 selected_adapters = []
 for col, adapter in zip(adapter_cols, adapter_instances):

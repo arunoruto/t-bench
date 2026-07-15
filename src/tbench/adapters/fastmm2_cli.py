@@ -19,8 +19,12 @@ from tbench.schema import ClusterRequest, ScatterResult
 class Fastmm2CliAdapter(ScattererAdapter):
     name = "fastmm2-cli"
 
-    def __init__(self, binary_path: str = "FaSTMM2"):
+    def __init__(self, binary_path: str = "FaSTMM2", omp_num_threads: int | None = None):
         self.binary_path = binary_path
+        # FaSTMM2 is built with -fopenmp (see external/fastmm2/src/CMakeLists.txt);
+        # None leaves OMP_NUM_THREADS unset, i.e. OpenMP's own default (usually
+        # all visible cores).
+        self.omp_num_threads = omp_num_threads
 
     def is_available(self) -> bool:
         if shutil.which(self.binary_path) is None:
@@ -74,8 +78,11 @@ class Fastmm2CliAdapter(ScattererAdapter):
             # adapter nor its caller ever reads .stdout/.stderr (results
             # come from the mueller.h5 output below), so there's no
             # information loss in discarding it outright.
+            env = None
+            if self.omp_num_threads is not None:
+                env = {**os.environ, "OMP_NUM_THREADS": str(self.omp_num_threads)}
             subprocess.run(
-                args, cwd=tmp, check=True,
+                args, cwd=tmp, check=True, env=env,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             wall_time = time.perf_counter() - t0
