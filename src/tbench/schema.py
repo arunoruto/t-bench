@@ -71,8 +71,18 @@ class ClusterRequest(BaseModel):
     going tighter still (1e-12/1e-10) changed nothing further, i.e. this
     already converges. Ignored by FaSTMM2."""
 
-    formulation: int = 2
-    """FaSTMM2-only: 0=STMM, 1=FaSTMM, 2=FaSTMM2 (MLFMM). Ignored by MSTM."""
+    formulation: int = 0
+    """FaSTMM2-only: 0=STMM, 1=FaSTMM, 2=FaSTMM2 (MLFMM). Ignored by MSTM.
+    Default is STMM (exact, no octree/multipole acceleration) rather than
+    MLFMM -- confirmed on a real two-sphere case (k=12.57, non-touching)
+    that MLFMM alone introduces a genuine ~2% error vs MSTM that vanishes
+    completely with STMM (0.0000%). For touching/near-touching clusters
+    this doesn't matter (formulation made no measurable difference on a
+    128-particle touching aggregate -- that disagreement comes from
+    near-field coupling, not the MLFMM approximation). MLFMM's own
+    purpose is speed on very large clusters, but even that didn't hold on
+    a 128-particle case (STMM: 2.4s, MLFMM: 6.7s) -- only switch to 2 if
+    profiling shows MLFMM actually winning for your cluster size."""
     mlfmm_accuracy: int = 2
     """FaSTMM2-only: MLFMM accuracy, significant digits. Ignored by MSTM."""
 

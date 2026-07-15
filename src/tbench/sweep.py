@@ -122,7 +122,7 @@ class SweepRequest(BaseModel):
     max_iterations: int = 2000
     mstm_mie_eps: float = 1e-10
     mstm_translation_eps: float = 1e-8
-    formulation: int = 2
+    formulation: int = 0
     mlfmm_accuracy: int = 2
     extra: dict[str, Any] = Field(default_factory=dict)
 

@@ -164,7 +164,16 @@ mstm_translation_eps = w3.number_input(
 
 formulation = w4.selectbox(
     "FaSTMM2 formulation", options=[0, 1, 2],
-    format_func=lambda v: {0: "STMM", 1: "FaSTMM", 2: "FaSTMM2"}[v], index=2,
+    format_func=lambda v: {0: "STMM", 1: "FaSTMM", 2: "FaSTMM2"}[v], index=0,
+    help=(
+        "STMM (exact, no octree/multipole acceleration) is the default: "
+        "confirmed on a real non-touching two-sphere case that MLFMM "
+        "alone introduces a genuine ~2% error vs MSTM that STMM doesn't "
+        "have (0.0000%). MLFMM's own purpose is speed on very large "
+        "clusters, but on a 128-particle touching aggregate STMM was "
+        "*faster* too (2.4s vs 6.7s) -- only switch away from STMM if "
+        "profiling shows MLFMM actually winning for your cluster size."
+    ),
 )
 mlfmm_accuracy = w4.slider("FaSTMM2 MLFMM accuracy (digits)", 1, 6, 2)
 omp_num_threads = w4.number_input(
