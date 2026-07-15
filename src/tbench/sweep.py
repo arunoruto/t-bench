@@ -120,6 +120,8 @@ class SweepRequest(BaseModel):
     n_phi: int = 1
     tolerance: float = 1e-4
     max_iterations: int = 2000
+    mstm_mie_eps: float = 1e-10
+    mstm_translation_eps: float = 1e-8
     formulation: int = 2
     mlfmm_accuracy: int = 2
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -162,6 +164,8 @@ def expand_sweep(sweep: SweepRequest) -> list[ClusterRequest]:
                 n_phi=sweep.n_phi,
                 tolerance=sweep.tolerance,
                 max_iterations=sweep.max_iterations,
+                mstm_mie_eps=sweep.mstm_mie_eps,
+                mstm_translation_eps=sweep.mstm_translation_eps,
                 formulation=sweep.formulation,
                 mlfmm_accuracy=sweep.mlfmm_accuracy,
                 extra=sweep.extra,

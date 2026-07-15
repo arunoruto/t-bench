@@ -141,6 +141,26 @@ n_phi = w2.slider("N_phi", 1, 32, 1)
 
 tolerance = w3.number_input("Tolerance", value=1e-4, format="%.1e")
 max_iterations = w3.number_input("Max iterations", value=500, min_value=1, step=100)
+mstm_mie_eps = w3.number_input(
+    "MSTM Mie eps", value=1e-10, format="%.1e",
+    help=(
+        "MSTM-only: per-sphere Mie coefficient convergence tolerance. "
+        "Default (1e-10) is tighter than pymstm's own library default "
+        "(1e-6) -- needed for touching/near-touching spheres deep in the "
+        "Rayleigh regime, where looser values under-truncate near-field "
+        "coupling badly enough to flip Csca's sign. Ignored by FaSTMM2."
+    ),
+)
+mstm_translation_eps = w3.number_input(
+    "MSTM translation eps", value=1e-8, format="%.1e",
+    help=(
+        "MSTM-only: translation-addition-theorem convergence tolerance "
+        "(near-field coupling accuracy between spheres, distinct from "
+        "MSTM Mie eps's per-sphere truncation). Default (1e-8) is "
+        "tighter than pymstm's own library default (1e-5), same reason "
+        "as MSTM Mie eps. Ignored by FaSTMM2."
+    ),
+)
 
 formulation = w4.selectbox(
     "FaSTMM2 formulation", options=[0, 1, 2],
@@ -221,6 +241,7 @@ if run_clicked:
         wavelengths_um=list(np.linspace(wl_start, wl_stop, int(wl_num))),
         n_theta=int(n_theta), n_phi=int(n_phi),
         tolerance=float(tolerance), max_iterations=int(max_iterations),
+        mstm_mie_eps=float(mstm_mie_eps), mstm_translation_eps=float(mstm_translation_eps),
         formulation=int(formulation), mlfmm_accuracy=int(mlfmm_accuracy),
     )
 

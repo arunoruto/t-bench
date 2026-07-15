@@ -31,6 +31,7 @@ def test_expand_sweep_one_request_per_wavelength():
         **_TWO_SPHERES,
         material=MaterialSpec(refractive_index=(1.5, 0.01)),
         wavelengths_um=[0.5, 0.7, 1.0],
+        mstm_mie_eps=1e-12, mstm_translation_eps=1e-9,
     )
     requests = expand_sweep(sweep)
     assert len(requests) == 3
@@ -40,6 +41,14 @@ def test_expand_sweep_one_request_per_wavelength():
         assert req.wavenumber == pytest.approx(2 * np.pi / wl)
         assert req.coords == [(-1.5, 0.0, 0.0), (1.5, 0.0, 0.0)]
         assert req.radii == [1.0, 1.0]
+        # Every ClusterRequest field SweepRequest re-exposes must actually
+        # get forwarded here -- mstm_mie_eps/mstm_translation_eps were
+        # added to ClusterRequest and the dashboard UI but initially
+        # forgotten in SweepRequest/expand_sweep, silently leaving the
+        # dashboard's "MSTM Mie eps"/"MSTM translation eps" fields with no
+        # effect. Non-default values here catch that class of bug.
+        assert req.mstm_mie_eps == 1e-12
+        assert req.mstm_translation_eps == 1e-9
 
 
 def test_sweep_requires_matching_coords_and_radii_lengths():
