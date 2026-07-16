@@ -41,12 +41,18 @@ def _strip_html(text: str) -> str:
 def _load_catalog(db_name: str):
     return DATABASES[db_name].catalog()
 
+
 # One color per *tool* (not per adapter) -- the Python wrapper and the
 # CLI binary of the same tool share a color, python drawn as a line, CLI
 # as same-colored markers, so the two are easy to pair up visually. Same
 # convention as pyMSTM's/pyFaSTMM's own dashboards.
 _TOOL_COLORS = {"mstm": "#1f77b4", "fastmm2": "#d62728"}
-_QUANTITY_LABELS = [("c_ext", "Cext"), ("c_abs", "Cabs"), ("c_sca", "Csca")]
+_QUANTITIES = [
+    ("c_ext", "Cext"),
+    ("c_abs", "Cabs"),
+    ("c_sca", "Csca"),
+    ("albedo", "Albedo (Csca / Cext)"),
+]
 
 st.set_page_config(page_title="t-bench Dashboard", layout="wide")
 st.title("t-bench Dashboard")
@@ -68,7 +74,9 @@ with c_cluster1:
     )
 with c_cluster2:
     geom_scale = st.number_input(
-        "Scale (multiplies every column)", value=1.0, format="%.4g",
+        "Scale (multiplies every column)",
+        value=1.0,
+        format="%.4g",
     )
     st.caption(
         "Converts the file's own units to **micrometers** -- the same unit "
@@ -76,14 +84,25 @@ with c_cluster2:
         "not 0.5 m). Match your file's raw units to micrometers, not SI "
         "meters: nm -> `1e-3`, angstrom -> `1e-4`, mm -> `1e3`. Using "
         "nm-to-*meters* (`1e-9`) instead of nm-to-*micrometers* (`1e-3`) "
-        "under-scales radii by another 1e-6 and crashes MSTM."
+        "under-scales radii by another 1e-6 and crashes MSTM. For iron "
+        "(and likely other strongly-absorbing metals): below ~5nm particle "
+        "radius, albedo (Csca/Cext) drops steeply into the deep-Rayleigh "
+        "regime (Qsca ~ x^4 vs Qabs ~ x^1) and Csca becomes numerically "
+        "fragile enough that MSTM and FaSTMM2 can disagree or even flip "
+        "sign -- confirmed 1nm radius gives unstable, sub-noise-floor "
+        "results while 5nm+ matches cleanly between both tools."
     )
     gap_factor = st.number_input(
-        "Gap factor (stretches positions only)", value=1.0, min_value=1.0, step=0.1,
+        "Gap factor (stretches positions only)",
+        value=1.0,
+        min_value=1.0,
+        step=0.1,
     )
 
 if uploaded is not None:
-    with tempfile.NamedTemporaryFile(suffix=Path(uploaded.name).suffix, delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        suffix=Path(uploaded.name).suffix, delete=False
+    ) as tmp:
         tmp.write(uploaded.getvalue())
         tmp_path = tmp.name
     try:
@@ -100,7 +119,9 @@ st.caption(f"{positions.shape[0]} spheres loaded.")
 
 st.subheader("Material")
 material_mode = st.radio(
-    "Source", ["Fixed refractive index", "refidxdb database"], horizontal=True,
+    "Source",
+    ["Fixed refractive index", "refidxdb database"],
+    horizontal=True,
 )
 if material_mode == "Fixed refractive index":
     mc1, mc2 = st.columns(2)
@@ -121,7 +142,9 @@ else:
             catalog_entries,
             format_func=lambda e: _strip_html(e.label),
         )
-        material = MaterialSpec(refidxdb_source=db_choice, refidxdb_catalog_path=entry.path)
+        material = MaterialSpec(
+            refidxdb_source=db_choice, refidxdb_catalog_path=entry.path
+        )
         st.caption(
             "Some entries only provide n or only k (common for materials that "
             "are transparent, i.e. non-absorbing, over their measured range) -- "
@@ -142,17 +165,26 @@ n_phi = w2.slider("N_phi", 1, 32, 1)
 tolerance = w3.number_input("Tolerance", value=1e-4, format="%.1e")
 max_iterations = w3.number_input("Max iterations", value=500, min_value=1, step=100)
 mstm_mie_eps = w3.number_input(
-    "MSTM Mie eps", value=1e-10, format="%.1e",
+    "MSTM Mie eps",
+    value=1e-10,
+    format="%.1e",
     help=(
-        "MSTM-only: per-sphere Mie coefficient convergence tolerance. "
-        "Default (1e-10) is tighter than pymstm's own library default "
-        "(1e-6) -- needed for touching/near-touching spheres deep in the "
-        "Rayleigh regime, where looser values under-truncate near-field "
-        "coupling badly enough to flip Csca's sign. Ignored by FaSTMM2."
+        "MSTM-only: per-sphere Mie coefficient truncation. "
+        "POSITIVE value = adaptive convergence tolerance (e.g. 1e-10 — "
+        "tighter than pymstm's default 1e-6, needed for touching-sphere "
+        "clusters where looser defaults can flip Csca's sign). "
+        "NEGATIVE value = fixed number of Mie terms per sphere (e.g. -8 "
+        "— locks truncation to exactly 8 terms for all spheres, matching "
+        "YASF-new's approach). A negative value prevents the adaptive "
+        "convergence from under-resolving near-field coupling and is the "
+        "most reliable way to avoid non-physical negative Csca. "
+        "Ignored by FaSTMM2."
     ),
 )
 mstm_translation_eps = w3.number_input(
-    "MSTM translation eps", value=1e-8, format="%.1e",
+    "MSTM translation eps",
+    value=1e-8,
+    format="%.1e",
     help=(
         "MSTM-only: translation-addition-theorem convergence tolerance "
         "(near-field coupling accuracy between spheres, distinct from "
@@ -163,8 +195,10 @@ mstm_translation_eps = w3.number_input(
 )
 
 formulation = w4.selectbox(
-    "FaSTMM2 formulation", options=[0, 1, 2],
-    format_func=lambda v: {0: "STMM", 1: "FaSTMM", 2: "FaSTMM2"}[v], index=0,
+    "FaSTMM2 formulation",
+    options=[0, 1, 2],
+    format_func=lambda v: {0: "STMM", 1: "FaSTMM", 2: "FaSTMM2"}[v],
+    index=0,
     help=(
         "STMM (exact, no octree/multipole acceleration) is the default: "
         "confirmed on a real non-touching two-sphere case that MLFMM "
@@ -176,13 +210,56 @@ formulation = w4.selectbox(
     ),
 )
 mlfmm_accuracy = w4.slider("FaSTMM2 MLFMM accuracy (digits)", 1, 6, 2)
+n_incidence = w3.number_input(
+    "Incidence angles to average",
+    value=0,
+    min_value=0,
+    step=1,
+    help=(
+        "MSTM and FaSTMM2: 0 = single fixed-orientation solve (default). "
+        "N > 0 = average cross sections over N Halton-sphere incidence "
+        "directions. Smooths out per-solve numerical noise in MSTM's "
+        "Q_sca = Q_ext + Q_inc - Q_abs subtraction that can produce "
+        "non-physical negative Csca for highly absorbing clusters (e.g. "
+        "iron nanoparticles). Both tools use identical, deterministic "
+        "angle sets. YASF-new routinely uses 4--40 angles for this reason."
+    ),
+)
+incidence_seed = w3.number_input(
+    "Incidence seed",
+    value=0,
+    min_value=0,
+    step=1,
+    help=(
+        "Seed for the Halton sequence when Incidence angles > 0. "
+        "Same seed + same N guarantees identical angle sets across "
+        "adapters for reproducible comparisons."
+    ),
+)
 omp_num_threads = w4.number_input(
-    "fastmm2-cli OMP_NUM_THREADS (0 = default)", value=0, min_value=0, step=1,
+    "fastmm2-cli OMP_NUM_THREADS (0 = default)",
+    value=0,
+    min_value=0,
+    step=1,
     help=(
         "FaSTMM2 is built with OpenMP. Only affects fastmm2-cli (a separate "
         "process); fastmm2-python runs in this process and isn't repinned. "
         "0 leaves OMP_NUM_THREADS unset, i.e. OpenMP's own default (usually "
         "all visible cores)."
+    ),
+)
+compute_mueller = w4.checkbox(
+    "Compute Mueller matrix (S11/DoLP)",
+    value=False,
+    help=(
+        "Adds one extra angle-resolved post-processing pass (on the *first* "
+        "incidence direction only, even with averaging enabled above) at "
+        "every wavelength in the sweep -- cheap relative to the solve "
+        "itself, but not free. Enables the phase function / DoLP plots "
+        "below. mstm-cli reports its own native -180..180deg, 1deg-"
+        "resolution grid regardless of N_theta (confirmed the .inp "
+        "scattering_map_dimension keyword has no effect on this output); "
+        "every other adapter follows N_theta above."
     ),
 )
 
@@ -197,13 +274,25 @@ if material is not None and st.checkbox(
             st.error(f"Failed to evaluate refractive index: {exc}")
         else:
             fig_nk = go.Figure()
-            fig_nk.add_trace(go.Scatter(
-                x=preview_wl, y=nk.real, name="n", mode="lines", line=dict(color="#1f77b4"),
-            ))
-            fig_nk.add_trace(go.Scatter(
-                x=preview_wl, y=nk.imag, name="k", mode="lines", line=dict(color="#d62728"),
-                yaxis="y2",
-            ))
+            fig_nk.add_trace(
+                go.Scatter(
+                    x=preview_wl,
+                    y=nk.real,
+                    name="n",
+                    mode="lines",
+                    line=dict(color="#1f77b4"),
+                )
+            )
+            fig_nk.add_trace(
+                go.Scatter(
+                    x=preview_wl,
+                    y=nk.imag,
+                    name="k",
+                    mode="lines",
+                    line=dict(color="#d62728"),
+                    yaxis="y2",
+                )
+            )
             fig_nk.update_layout(
                 xaxis_title="Wavelength (um)",
                 yaxis=dict(title="n", color="#1f77b4"),
@@ -229,7 +318,9 @@ with st.expander("Inspect raw inputs (wavelengths + scaled positions)"):
     wl_array = np.linspace(wl_start, wl_stop, int(wl_num))
     st.write(f"**Wavelengths (um)**, {len(wl_array)} steps:")
     st.dataframe(
-        pd.DataFrame({"wavelength_um": wl_array}), width="stretch", hide_index=True,
+        pd.DataFrame({"wavelength_um": wl_array}),
+        width="stretch",
+        hide_index=True,
         column_config={"wavelength_um": st.column_config.NumberColumn(format="%.6g")},
     )
     st.write(
@@ -245,16 +336,19 @@ with st.expander("Inspect raw inputs (wavelengths + scaled positions)"):
     )
     st.dataframe(
         pd.DataFrame(positions, columns=["x", "y", "z", "radius"]),
-        width="stretch", hide_index=True,
+        width="stretch",
+        hide_index=True,
         column_config={
-            c: st.column_config.NumberColumn(format="%.6g") for c in ["x", "y", "z", "radius"]
+            c: st.column_config.NumberColumn(format="%.6g")
+            for c in ["x", "y", "z", "radius"]
         },
     )
 
 st.subheader("Adapters to run")
 adapter_instances = [
     Fastmm2CliAdapter(omp_num_threads=int(omp_num_threads) or None)
-    if cls is Fastmm2CliAdapter else cls()
+    if cls is Fastmm2CliAdapter
+    else cls()
     for cls in ALL_ADAPTERS
 ]
 adapter_cols = st.columns(len(adapter_instances))
@@ -262,13 +356,21 @@ selected_adapters = []
 for col, adapter in zip(adapter_cols, adapter_instances):
     available = adapter.is_available()
     checked = col.checkbox(
-        adapter.name, value=available, disabled=not available,
-        help=None if available else "Not available (binary not on PATH or package not built)",
+        adapter.name,
+        value=available,
+        disabled=not available,
+        help=None
+        if available
+        else "Not available (binary not on PATH or package not built)",
     )
     if checked:
         selected_adapters.append(adapter)
 
-run_clicked = st.button("Run Benchmark", type="primary", disabled=(material is None or not selected_adapters))
+run_clicked = st.button(
+    "Run Benchmark",
+    type="primary",
+    disabled=(material is None or not selected_adapters),
+)
 st.divider()
 
 # ---------------------------------------------------------------------------
@@ -281,21 +383,31 @@ if run_clicked:
         radii=list(positions[:, 3]),
         material=material,
         wavelengths_um=list(np.linspace(wl_start, wl_stop, int(wl_num))),
-        n_theta=int(n_theta), n_phi=int(n_phi),
-        tolerance=float(tolerance), max_iterations=int(max_iterations),
-        mstm_mie_eps=float(mstm_mie_eps), mstm_translation_eps=float(mstm_translation_eps),
-        formulation=int(formulation), mlfmm_accuracy=int(mlfmm_accuracy),
+        n_theta=int(n_theta),
+        n_phi=int(n_phi),
+        tolerance=float(tolerance),
+        max_iterations=int(max_iterations),
+        mstm_mie_eps=float(mstm_mie_eps),
+        mstm_translation_eps=float(mstm_translation_eps),
+        formulation=int(formulation),
+        mlfmm_accuracy=int(mlfmm_accuracy),
+        n_incidence_angles=int(n_incidence),
+        incidence_seed=int(incidence_seed),
+        compute_mueller=bool(compute_mueller),
     )
 
     progress = st.progress(0.0, text="Running benchmark...")
 
     def _on_progress(frac, wl_um, adapter_name):
-        progress.progress(frac, text=f"{adapter_name}: wavelength {wl_um:.3g} um ({frac:.0%})")
+        progress.progress(
+            frac, text=f"{adapter_name}: wavelength {wl_um:.3g} um ({frac:.0%})"
+        )
 
     try:
         results = run_sweep(sweep, selected_adapters, progress_callback=_on_progress)
         st.session_state["tbench_results"] = {
-            "results": results, "wavelengths_um": sweep.wavelengths_um,
+            "results": results,
+            "wavelengths_um": sweep.wavelengths_um,
         }
     except Exception as exc:  # noqa: BLE001
         st.error(f"Benchmark failed: {exc}")
@@ -311,35 +423,60 @@ if "tbench_results" in st.session_state:
     wl_um = np.array(state["wavelengths_um"])
 
     st.subheader("Accuracy: cross sections vs. wavelength")
-    acc_cols = st.columns(3)
-    for col, (key, label) in zip(acc_cols, _QUANTITY_LABELS):
-        fig = go.Figure()
-        for adapter_name, adapter_results in results.items():
-            tool = "mstm" if adapter_name.startswith("mstm") else "fastmm2"
-            color = _TOOL_COLORS[tool]
-            is_cli = adapter_name.endswith("cli")
-            y = [getattr(r, key) if r is not None else None for r in adapter_results]
-            fig.add_trace(go.Scatter(
-                x=wl_um, y=y, name=adapter_name,
-                mode="markers" if is_cli else "lines+markers",
-                line=None if is_cli else dict(color=color),
-                marker=dict(color=color, symbol="x" if is_cli else "circle"),
-            ))
-        fig.update_layout(
-            title=label, xaxis_title="Wavelength (um)", yaxis_title=label, height=380,
-        )
-        col.plotly_chart(fig, width="stretch")
+
+    def _get_y(r, key):
+        if r is None:
+            return None
+        if key == "albedo":
+            return r.c_sca / r.c_ext if r.c_ext != 0 else None
+        return getattr(r, key)
+
+    # 2×2 grid: top row = Cext, Cabs; bottom row = Csca, Albedo
+    for row_idx, (row_start, row_end) in enumerate([(0, 2), (2, 4)]):
+        cols = st.columns(2)
+        for col, (key, label) in zip(cols, _QUANTITIES[row_start:row_end]):
+            fig = go.Figure()
+            for adapter_name, adapter_results in results.items():
+                tool = "mstm" if adapter_name.startswith("mstm") else "fastmm2"
+                color = _TOOL_COLORS[tool]
+                is_cli = adapter_name.endswith("cli")
+                y = [_get_y(r, key) for r in adapter_results]
+                fig.add_trace(
+                    go.Scatter(
+                        x=wl_um,
+                        y=y,
+                        name=adapter_name,
+                        mode="markers" if is_cli else "lines+markers",
+                        line=None if is_cli else dict(color=color),
+                        marker=dict(color=color, symbol="x" if is_cli else "circle"),
+                    )
+                )
+            fig.update_layout(
+                title=label,
+                xaxis_title="Wavelength (um)",
+                yaxis_title=label,
+                height=380,
+            )
+            col.plotly_chart(fig, width="stretch")
 
     err_setting_cols = st.columns(2)
     gt_tool = err_setting_cols[0].radio(
-        "Ground truth tool", ["MSTM", "FaSTMM2"], horizontal=True,
+        "Ground truth tool",
+        ["MSTM", "FaSTMM2"],
+        horizontal=True,
     )
     error_mode = err_setting_cols[1].radio(
-        "Error type", ["Relative: (val - gt) / gt", "Ratio: val / gt"], horizontal=True,
+        "Error type",
+        ["Relative: (val - gt) / gt", "Ratio: val / gt"],
+        horizontal=True,
     )
     # Prefer the *-python adapter (direct f2py call, no file-round-trip
     # precision loss) over its *-cli counterpart if both ran.
-    gt_candidates = ("mstm-python", "mstm-cli") if gt_tool == "MSTM" else ("fastmm2-python", "fastmm2-cli")
+    gt_candidates = (
+        ("mstm-python", "mstm-cli")
+        if gt_tool == "MSTM"
+        else ("fastmm2-python", "fastmm2-cli")
+    )
     gt_name = next((n for n in gt_candidates if n in results), None)
     if gt_name is None:
         st.info(f"Select a {gt_tool} adapter to see the error plot below.")
@@ -347,36 +484,138 @@ if "tbench_results" in st.session_state:
         is_relative = error_mode.startswith("Relative")
         y_title = "Error (%)" if is_relative else "Ratio (val / gt)"
         hline_y = 0 if is_relative else 1
-        st.subheader(f"Error vs. {gt_tool} ground truth ({gt_name}): {error_mode.split(': ', 1)[1]}")
+        st.subheader(
+            f"Error vs. {gt_tool} ground truth ({gt_name}): {error_mode.split(': ', 1)[1]}"
+        )
         gt_results = results[gt_name]
-        err_cols = st.columns(3)
-        for col, (key, label) in zip(err_cols, _QUANTITY_LABELS):
-            fig = go.Figure()
-            for adapter_name, adapter_results in results.items():
-                if adapter_name == gt_name:
-                    continue
-                tool = "mstm" if adapter_name.startswith("mstm") else "fastmm2"
-                color = _TOOL_COLORS[tool]
-                is_cli = adapter_name.endswith("cli")
-                y = []
-                for r, gt in zip(adapter_results, gt_results):
-                    if r is None or gt is None or getattr(gt, key) == 0:
-                        y.append(None)
-                    elif is_relative:
-                        y.append(100 * (getattr(r, key) - getattr(gt, key)) / getattr(gt, key))
-                    else:
-                        y.append(getattr(r, key) / getattr(gt, key))
-                fig.add_trace(go.Scatter(
-                    x=wl_um, y=y, name=adapter_name,
+
+        def _get_val(d, key):
+            if d is None:
+                return None
+            if key == "albedo":
+                return d.c_sca / d.c_ext if d.c_ext != 0 else None
+            return getattr(d, key)
+
+        for row_idx, (row_start, row_end) in enumerate([(0, 2), (2, 4)]):
+            cols = st.columns(2)
+            for col, (key, label) in zip(cols, _QUANTITIES[row_start:row_end]):
+                fig = go.Figure()
+                for adapter_name, adapter_results in results.items():
+                    if adapter_name == gt_name:
+                        continue
+                    tool = "mstm" if adapter_name.startswith("mstm") else "fastmm2"
+                    color = _TOOL_COLORS[tool]
+                    is_cli = adapter_name.endswith("cli")
+                    y = []
+                    for r, gt in zip(adapter_results, gt_results):
+                        val = _get_val(r, key)
+                        gt_val = _get_val(gt, key)
+                        if val is None or gt_val is None or gt_val == 0:
+                            y.append(None)
+                        elif is_relative:
+                            y.append(100 * (val - gt_val) / gt_val)
+                        else:
+                            y.append(val / gt_val)
+                    fig.add_trace(
+                        go.Scatter(
+                            x=wl_um,
+                            y=y,
+                            name=adapter_name,
+                            mode="markers" if is_cli else "lines+markers",
+                            line=None if is_cli else dict(color=color),
+                            marker=dict(
+                                color=color, symbol="x" if is_cli else "circle"
+                            ),
+                        )
+                    )
+                fig.add_hline(y=hline_y, line=dict(color="gray", dash="dot"))
+                fig.update_layout(
+                    title=label,
+                    xaxis_title="Wavelength (um)",
+                    yaxis_title=y_title,
+                    height=380,
+                )
+                col.plotly_chart(fig, width="stretch")
+
+    mueller_available = any(
+        r is not None and r.mueller
+        for adapter_results in results.values()
+        for r in adapter_results
+    )
+    if mueller_available:
+        st.subheader("Angular quantities: phase function (S11) and DoLP")
+        st.caption(
+            "Angle-resolved quantities for a *single* wavelength (an angular "
+            "distribution isn't a wavelength-swept quantity) -- pick which "
+            "one below. S12/S11 = degree of linear polarization (DoLP) for "
+            "unpolarized incident light. mstm-cli plots against its own "
+            "native theta grid; every other adapter shares the N_theta grid "
+            "set above."
+        )
+        mueller_wl_idx = st.select_slider(
+            "Wavelength (um)",
+            options=list(range(len(wl_um))),
+            value=0,
+            format_func=lambda i: f"{wl_um[i]:.4g}",
+        )
+        fig_s11 = go.Figure()
+        fig_dolp = go.Figure()
+        any_mueller_here = False
+        for adapter_name, adapter_results in results.items():
+            r = adapter_results[mueller_wl_idx]
+            if r is None or not r.mueller:
+                continue
+            any_mueller_here = True
+            tool = "mstm" if adapter_name.startswith("mstm") else "fastmm2"
+            color = _TOOL_COLORS[tool]
+            is_cli = adapter_name.endswith("cli")
+            m = np.array(r.mueller)
+            theta_deg, s11, s12 = m[:, 0], m[:, 1], m[:, 2]
+            dolp = np.divide(
+                -s12, s11, out=np.full_like(s11, np.nan), where=s11 != 0
+            )
+            fig_s11.add_trace(
+                go.Scatter(
+                    x=theta_deg,
+                    y=s11,
+                    name=adapter_name,
                     mode="markers" if is_cli else "lines+markers",
                     line=None if is_cli else dict(color=color),
                     marker=dict(color=color, symbol="x" if is_cli else "circle"),
-                ))
-            fig.add_hline(y=hline_y, line=dict(color="gray", dash="dot"))
-            fig.update_layout(
-                title=label, xaxis_title="Wavelength (um)", yaxis_title=y_title, height=380,
+                )
             )
-            col.plotly_chart(fig, width="stretch")
+            fig_dolp.add_trace(
+                go.Scatter(
+                    x=theta_deg,
+                    y=dolp,
+                    name=adapter_name,
+                    mode="markers" if is_cli else "lines+markers",
+                    line=None if is_cli else dict(color=color),
+                    marker=dict(color=color, symbol="x" if is_cli else "circle"),
+                )
+            )
+        if not any_mueller_here:
+            st.info(
+                "No adapter reported a Mueller matrix at this wavelength "
+                "(check compute_mueller was enabled before running)."
+            )
+        else:
+            fig_s11.update_layout(
+                title="S11 (phase function)",
+                xaxis_title="Scattering angle theta (deg)",
+                yaxis_title="S11",
+                yaxis_type="log",
+                height=380,
+            )
+            fig_dolp.update_layout(
+                title="DoLP = -S12 / S11",
+                xaxis_title="Scattering angle theta (deg)",
+                yaxis_title="DoLP",
+                height=380,
+            )
+            mc1, mc2 = st.columns(2)
+            mc1.plotly_chart(fig_s11, width="stretch")
+            mc2.plotly_chart(fig_dolp, width="stretch")
 
     st.subheader("Speed: wall-clock time vs. wavelength")
     fig_time = go.Figure()
@@ -385,14 +624,20 @@ if "tbench_results" in st.session_state:
         color = _TOOL_COLORS[tool]
         is_cli = adapter_name.endswith("cli")
         y = [r.wall_time_seconds if r is not None else None for r in adapter_results]
-        fig_time.add_trace(go.Scatter(
-            x=wl_um, y=y, name=adapter_name,
-            mode="markers" if is_cli else "lines+markers",
-            line=None if is_cli else dict(color=color),
-            marker=dict(color=color, symbol="x" if is_cli else "circle"),
-        ))
+        fig_time.add_trace(
+            go.Scatter(
+                x=wl_um,
+                y=y,
+                name=adapter_name,
+                mode="markers" if is_cli else "lines+markers",
+                line=None if is_cli else dict(color=color),
+                marker=dict(color=color, symbol="x" if is_cli else "circle"),
+            )
+        )
     fig_time.update_layout(
-        xaxis_title="Wavelength (um)", yaxis_title="Wall time (s)", yaxis_type="log",
+        xaxis_title="Wavelength (um)",
+        yaxis_title="Wall time (s)",
+        yaxis_type="log",
     )
     st.plotly_chart(fig_time, width="stretch")
 
@@ -433,10 +678,17 @@ if "tbench_results" in st.session_state:
             column_config[col] = st.column_config.NumberColumn(format="scientific")
         for col in set(time_cols):
             column_config[col] = st.column_config.NumberColumn(format="%.4f")
-        column_config["max Cext spread (%)"] = st.column_config.NumberColumn(format="%.3f")
+        column_config["max Cext spread (%)"] = st.column_config.NumberColumn(
+            format="%.3f"
+        )
 
         st.dataframe(
-            pd.DataFrame(rows), width="stretch", hide_index=True, column_config=column_config,
+            pd.DataFrame(rows),
+            width="stretch",
+            hide_index=True,
+            column_config=column_config,
         )
 else:
-    st.info("Configure a cluster, material, and wavelength range above, then click **Run Benchmark**.")
+    st.info(
+        "Configure a cluster, material, and wavelength range above, then click **Run Benchmark**."
+    )

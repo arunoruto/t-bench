@@ -55,12 +55,22 @@ class ClusterRequest(BaseModel):
     max_iterations: int = 2000
 
     mstm_mie_eps: float = 1e-10
-    """MSTM-only: per-sphere Mie coefficient convergence tolerance.
-    Tighter than pymstm's own library default (1e-6) -- confirmed needed
-    for touching/near-touching spheres deep in the Rayleigh regime (e.g.
-    a fractal aggregate at nanometer particle scale), where the default
-    under-truncates near-field coupling badly enough to flip Csca's sign
-    relative to FaSTMM2's independent computation. See mstm_translation_eps."""
+    """MSTM-only: per-sphere Mie coefficient truncation control.
+
+    Positive value = adaptive convergence tolerance (e.g. 1e-10 is tighter
+    than pymstm's own library default of 1e-6 -- confirmed needed for
+    touching/near-touching spheres deep in the Rayleigh regime, where
+    looser defaults under-truncate near-field coupling badly enough to
+    flip Csca's sign relative to FaSTMM2's independent computation).
+
+    Negative value = fixed number of Mie terms per sphere (e.g. -8 locks
+    truncation to exactly 8 terms, matching YASF-new's approach). A fixed
+    lmax prevents the adaptive convergence from creating inconsistencies
+    between the Mie coefficient truncation and the T-matrix expansion
+    order -- the most reliable way to avoid non-physical negative Csca.
+    The adapters cast negative values to int before passing to MSTM.
+
+    See mstm_translation_eps."""
     mstm_translation_eps: float = 1e-8
     """MSTM-only: translation-addition-theorem convergence tolerance
     (controls near-field coupling accuracy between spheres, as distinct
@@ -85,6 +95,31 @@ class ClusterRequest(BaseModel):
     profiling shows MLFMM actually winning for your cluster size."""
     mlfmm_accuracy: int = 2
     """FaSTMM2-only: MLFMM accuracy, significant digits. Ignored by MSTM."""
+
+    n_incidence_angles: int = 0
+    """MSTM and FaSTMM2: number of incidence directions to average over.
+    0 = single fixed-orientation solve (default). N > 0 = solve at N
+    Halton-sphere directions and return the arithmetic mean of the
+    cross sections (Cext, Cabs, Csca). Smooths out per-solve numerical
+    noise in MSTM's ``Q_sca = Q_ext + Q_inc - Q_abs`` subtraction that
+    can produce non-physical negative Csca for highly absorbing
+    clusters (e.g. iron nanoparticles). YASF-new routinely uses 4--40
+    incidence directions for the same reason."""
+    incidence_seed: int = 0
+    """Seed for the Halton sequence when n_incidence_angles > 0. Same
+    seed + same n guarantees both tools use identical angle sets."""
+
+    compute_mueller: bool = False
+    """MSTM and FaSTMM2: also compute S11 (phase function) and S12 (for
+    DoLP = -S12/S11) as a function of scattering angle, stored in
+    ``ScatterResult.mueller`` as ``[[theta_deg, S11, S12], ...]`` on a
+    uniform 0-180deg grid with ``n_theta`` points (both tools use
+    identical angles -- no interpolation needed for comparison; see
+    adapters/mstm_python.py's comment for why the per-angle
+    ``get_scattering_angle()`` API is used for MSTM instead of its
+    faster but unreliable batch ``get_scattering_matrix()``). This is
+    cheap post-processing on the already-solved field (not a re-solve),
+    but off by default to keep it opt-in."""
 
     extra: dict[str, Any] = Field(default_factory=dict)
     """Escape hatch for adapter-specific overrides not worth promoting to
@@ -123,12 +158,15 @@ class ScatterResult(BaseModel):
     n_spheres: int
 
     mueller: list[list[float]] | None = None
-    """Tool-native angular Mueller matrix, if computed -- shape and column
-    layout differ between tools (MSTM: (n_angles, 16); FaSTMM2: (N_theta *
-    N_phi, 18) with phi/theta as the first two columns), deliberately not
-    reconciled into one common grid in this v1 schema. Reserved for a
-    future comparison pass; the primary output for now is cross sections
-    and timing, which compare directly."""
+    """Set only when the originating ClusterRequest had compute_mueller=True.
+    A reconciled, tool-independent ``[[theta_deg, S11, S12], ...]`` on a
+    uniform 0-180deg grid with n_theta points -- both tools evaluated at
+    identical angles, so this compares directly with no interpolation.
+    S11 is the phase function; DoLP = -S12/S11. Not the tools' own native
+    full 4x4 Mueller matrices (those have incompatible column/row
+    conventions between MSTM and FaSTMM2 -- see adapters/mstm_python.py's
+    and fastmm2_python.py's comments); only S11/S12 are extracted since
+    that's what's needed for phase function/DoLP comparison."""
 
     raw: dict[str, Any] = Field(default_factory=dict)
     """Tool-native output, for debugging -- not part of the stable schema."""

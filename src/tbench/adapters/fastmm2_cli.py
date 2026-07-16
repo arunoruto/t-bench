@@ -14,6 +14,7 @@ import numpy as np
 
 from tbench.adapters.base import ScattererAdapter
 from tbench.adapters.fastmm2_python import _rotate_positions_for_incident
+from tbench.incidence import generate_incidence_directions
 from tbench.schema import ClusterRequest, ScatterResult
 
 
@@ -48,94 +49,139 @@ class Fastmm2CliAdapter(ScattererAdapter):
                 stacklevel=2,
             )
 
-        coords = _rotate_positions_for_incident(
-            request.coords,
-            request.incident_polar_deg,
-            request.incident_azimuthal_deg,
+        directions = generate_incidence_directions(
+            request.n_incidence_angles,
+            request.incidence_seed,
+        )
+        angles_to_solve = (
+            directions
+            if directions
+            else [(request.incident_polar_deg, request.incident_azimuthal_deg)]
         )
 
         n = request.n_spheres
         eps = np.array([complex(*ri) ** 2 for ri in request.refractive_index])
         n_phi = max(1, request.n_phi)
 
-        with tempfile.TemporaryDirectory() as tmp:
-            geo_path = os.path.join(tmp, "geometry.h5")
-            s_out = os.path.join(tmp, "mueller.h5")
-            with h5py.File(geo_path, "w") as fh:
-                fh.create_dataset("coord", data=np.asarray(coords))
-                fh.create_dataset("radius", data=np.asarray(request.radii))
-                fh.create_dataset("param_r", data=np.real(eps))
-                fh.create_dataset("param_i", data=np.imag(eps))
-                fh.create_dataset("tind", data=np.zeros(n, dtype=np.int32))
-                fh.create_dataset("angles", data=np.zeros((n, 3)))
+        c_ext_vals: list[float] = []
+        c_abs_vals: list[float] = []
+        c_sca_vals: list[float] = []
+        asymmetry_vals: list[float] = []
+        raw_angles: list[tuple[float, float]] = []
+        mueller: list[list[float]] | None = None
 
-            args = [
-                self.binary_path,
-                "-geometry_file",
-                geo_path,
-                "-k",
-                str(request.wavenumber),
-                "-N_ave",
-                "0",
-                "-N_theta",
-                str(request.n_theta),
-                "-N_phi",
-                str(n_phi),
-                "-formulation",
-                str(request.formulation),
-                "-acc",
-                str(request.mlfmm_accuracy),
-                "-tol",
-                str(request.tolerance),
-                "-restart",
-                "5",
-                "-max_iter",
-                str(request.max_iterations),
-                "-S_out",
-                s_out,
-            ]
-            t0 = time.perf_counter()
-            # NOT capture_output=True: FaSTMM2 prints copious per-iteration
-            # diagnostics (every GMRES step, every octree/translation
-            # phase), and capture_output buffers all of it in *Python
-            # process memory*, unbounded, for the whole run -- confirmed
-            # as a real OOM crash on a genuinely hard cluster (the
-            # 128-particle fractal aggregate test file) that ground
-            # through many iterations before finishing. Neither this
-            # adapter nor its caller ever reads .stdout/.stderr (results
-            # come from the mueller.h5 output below), so there's no
-            # information loss in discarding it outright.
-            env = None
-            if self.omp_num_threads is not None:
-                env = {**os.environ, "OMP_NUM_THREADS": str(self.omp_num_threads)}
-            subprocess.run(
-                args,
-                cwd=tmp,
-                check=True,
-                env=env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+        t0 = time.perf_counter()
+        for i, (polar_deg, azimuthal_deg) in enumerate(angles_to_solve):
+            raw_angles.append((polar_deg, azimuthal_deg))
+            coords = _rotate_positions_for_incident(
+                request.coords,
+                polar_deg,
+                azimuthal_deg,
             )
-            wall_time = time.perf_counter() - t0
+            with tempfile.TemporaryDirectory() as tmp:
+                geo_path = os.path.join(tmp, "geometry.h5")
+                s_out = os.path.join(tmp, "mueller.h5")
+                with h5py.File(geo_path, "w") as fh:
+                    fh.create_dataset("coord", data=np.asarray(coords))
+                    fh.create_dataset("radius", data=np.asarray(request.radii))
+                    fh.create_dataset("param_r", data=np.real(eps))
+                    fh.create_dataset("param_i", data=np.imag(eps))
+                    fh.create_dataset("tind", data=np.zeros(n, dtype=np.int32))
+                    fh.create_dataset("angles", data=np.zeros((n, 3)))
 
-            with h5py.File(s_out) as fh:
-                crs = fh["cross_sections"][()]
+                args = [
+                    self.binary_path,
+                    "-geometry_file",
+                    geo_path,
+                    "-k",
+                    str(request.wavenumber),
+                    "-N_ave",
+                    "0",
+                    "-N_theta",
+                    str(request.n_theta),
+                    "-N_phi",
+                    str(n_phi),
+                    "-formulation",
+                    str(request.formulation),
+                    "-acc",
+                    str(request.mlfmm_accuracy),
+                    "-tol",
+                    str(request.tolerance),
+                    "-restart",
+                    "5",
+                    "-max_iter",
+                    str(request.max_iterations),
+                    "-S_out",
+                    s_out,
+                ]
+                env_override = None
+                if self.omp_num_threads is not None:
+                    env_override = {
+                        **os.environ,
+                        "OMP_NUM_THREADS": str(self.omp_num_threads),
+                    }
+                subprocess.run(
+                    args,
+                    cwd=tmp,
+                    check=True,
+                    env=env_override,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                raw_mueller = None
+                with h5py.File(s_out) as fh:
+                    crs = fh["cross_sections"][()]
+                    if request.compute_mueller and i == 0 and "mueller" in fh:
+                        # write2file_mueller (io.f90) writes the Fortran
+                        # array's own (n_angles, 18) shape via HDF5 dims
+                        # taken straight from size(A,1)/size(A,2) with no
+                        # row/column-major correction, so h5py reads it
+                        # back transposed as (18, n_angles) -- confirmed
+                        # directly (theta column came back as literal
+                        # degrees in the hundreds of thousands before
+                        # transposing). .T recovers the same
+                        # [phi, theta(radians), S11, S12, ...] layout as
+                        # the Python binding's result["mueller"] -- see
+                        # fastmm2_python.py's comment. First n_theta rows
+                        # are the phi=0 cut regardless of N_phi.
+                        raw_mueller = fh["mueller"][()].T[: request.n_theta]
 
-        # cross_sections is [Cext, Cext-Cabs, Cabs, Csca(far-field
-        # integrated), asymmetry]. Cext-Cabs (index 1, optical theorem)
-        # is exact regardless of angular resolution; Csca (index 3) is
-        # only as accurate as N_theta/N_phi and converges slowly -- see
-        # the matching comment in fastmm2_python.py. Use index 1 as the
-        # canonical, resolution-independent c_sca for cross-tool comparison.
+            # cross_sections is [Cext, Cext-Cabs, Cabs, Csca(far-field
+            # integrated), asymmetry] -- see fastmm2_python.py's matching
+            # comment for why index 1 (optical theorem) is used as c_sca
+            # instead of index 3 (far-field integrated, resolution-
+            # dependent).
+            c_ext_vals.append(float(crs[0]))
+            c_abs_vals.append(float(crs[2]))
+            c_sca_vals.append(float(crs[1]))
+            asymmetry_vals.append(float(crs[4]))
+            if raw_mueller is not None:
+                mueller = [
+                    [float(np.degrees(row[1])), float(row[2]), float(row[3])]
+                    for row in raw_mueller
+                ]
+        wall_time = time.perf_counter() - t0
+
+        n_solves = len(angles_to_solve)
+        raw: dict[str, object] = {
+            "c_ext_persolve": c_ext_vals if n_solves > 1 else c_ext_vals[0],
+            "c_abs_persolve": c_abs_vals if n_solves > 1 else c_abs_vals[0],
+            "c_sca_persolve": c_sca_vals if n_solves > 1 else c_sca_vals[0],
+            "asymmetry_persolve": asymmetry_vals if n_solves > 1 else asymmetry_vals[0],
+        }
+        if directions:
+            raw["incidence_angles"] = raw_angles
+
         return ScatterResult(
             tool="fastmm2",
             backend="cli",
             adapter_name=self.name,
-            c_ext=float(crs[0]),
-            c_abs=float(crs[2]),
-            c_sca=float(crs[1]),
-            asymmetry=float(crs[4]),
+            c_ext=sum(c_ext_vals) / n_solves,
+            c_abs=sum(c_abs_vals) / n_solves,
+            c_sca=sum(c_sca_vals) / n_solves,
+            asymmetry=sum(asymmetry_vals) / n_solves,
             wall_time_seconds=wall_time,
             n_spheres=n,
-            raw={"cross_sections": crs.tolist()},
+            mueller=mueller,
+            raw=raw,
         )

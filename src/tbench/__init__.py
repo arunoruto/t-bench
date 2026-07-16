@@ -11,6 +11,7 @@ from tbench.adapters import (
     ScattererAdapter,
 )
 from tbench.geometry import load_positions
+from tbench.incidence import generate_incidence_directions
 from tbench.runner import run_benchmark, run_sweep
 from tbench.schema import ClusterRequest, ScatterResult
 from tbench.sweep import MaterialSpec, SweepRequest, expand_sweep
@@ -27,6 +28,7 @@ __all__ = [
     "run_benchmark",
     "run_sweep",
     "load_positions",
+    "generate_incidence_directions",
     "MaterialSpec",
     "SweepRequest",
     "expand_sweep",

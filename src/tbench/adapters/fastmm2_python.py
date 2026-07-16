@@ -8,6 +8,7 @@ import warnings
 import numpy as np
 
 from tbench.adapters.base import ScattererAdapter
+from tbench.incidence import generate_incidence_directions
 from tbench.schema import ClusterRequest, ScatterResult
 
 
@@ -71,37 +72,85 @@ class Fastmm2PythonAdapter(ScattererAdapter):
                 stacklevel=2,
             )
 
-        coords = _rotate_positions_for_incident(
-            request.coords,
-            request.incident_polar_deg,
-            request.incident_azimuthal_deg,
+        directions = generate_incidence_directions(
+            request.n_incidence_angles,
+            request.incidence_seed,
+        )
+        angles_to_solve = (
+            directions
+            if directions
+            else [(request.incident_polar_deg, request.incident_azimuthal_deg)]
         )
 
         eps = [complex(*ri) ** 2 for ri in request.refractive_index]
 
         t0 = time.perf_counter()
         f = FaSTMM2()
-        result = f.solve(
-            coords,
-            request.radii,
-            eps,
-            request.wavenumber,
-            N_theta=request.n_theta,
-            N_phi=max(1, request.n_phi),
-            formulation=request.formulation,
-            acc=request.mlfmm_accuracy,
-            tol=request.tolerance,
-            restart=5,
-            max_iter=request.max_iterations,
-        )
+
+        c_ext_vals: list[float] = []
+        c_abs_vals: list[float] = []
+        c_sca_vals: list[float] = []
+        asymmetry_vals: list[float] = []
+        raw_angles: list[tuple[float, float]] = []
+        mueller: list[list[float]] | None = None
+
+        for i, (polar_deg, azimuthal_deg) in enumerate(angles_to_solve):
+            raw_angles.append((polar_deg, azimuthal_deg))
+            coords = _rotate_positions_for_incident(
+                request.coords,
+                polar_deg,
+                azimuthal_deg,
+            )
+            result = f.solve(
+                coords,
+                request.radii,
+                eps,
+                request.wavenumber,
+                N_theta=request.n_theta,
+                N_phi=max(1, request.n_phi),
+                formulation=request.formulation,
+                acc=request.mlfmm_accuracy,
+                tol=request.tolerance,
+                restart=5,
+                max_iter=request.max_iterations,
+            )
+            c_ext_vals.append(result["c_ext"])
+            c_abs_vals.append(result["c_abs"])
+            c_sca_vals.append(result["c_ext_minus_c_abs"])
+            asymmetry_vals.append(result["asymmetry"])
+
+            # S11(theta)/DoLP don't have a clean meaning averaged across
+            # different incidence directions (theta is relative to the
+            # incident direction) -- only extract from the first solved
+            # orientation, same convention as mstm_python.py.
+            if request.compute_mueller and i == 0:
+                # columns are [phi, theta(RADIANS -- not degrees despite
+                # the theta_deg-sounding convention elsewhere), S11, S12,
+                # ...], row-major, phi outermost: the first n_theta rows
+                # are exactly the phi=0 cut regardless of N_phi.
+                m = result["mueller"][: request.n_theta]
+                mueller = [
+                    [float(np.degrees(row[1])), float(row[2]), float(row[3])]
+                    for row in m
+                ]
         wall_time = time.perf_counter() - t0
+
+        n_solves = len(angles_to_solve)
+        raw: dict[str, object] = {
+            "c_ext_persolve": c_ext_vals if n_solves > 1 else c_ext_vals[0],
+            "c_abs_persolve": c_abs_vals if n_solves > 1 else c_abs_vals[0],
+            "c_sca_persolve": c_sca_vals if n_solves > 1 else c_sca_vals[0],
+            "asymmetry_persolve": asymmetry_vals if n_solves > 1 else asymmetry_vals[0],
+        }
+        if directions:
+            raw["incidence_angles"] = raw_angles
 
         return ScatterResult(
             tool="fastmm2",
             backend="python",
             adapter_name=self.name,
-            c_ext=result["c_ext"],
-            c_abs=result["c_abs"],
+            c_ext=sum(c_ext_vals) / n_solves,
+            c_abs=sum(c_abs_vals) / n_solves,
             # result["c_sca"] is computed by integrating the far field
             # over the requested angular grid, so it's only as accurate
             # as N_theta/N_phi and converges slowly (confirmed: ~0.62 at
@@ -111,9 +160,10 @@ class Fastmm2PythonAdapter(ScattererAdapter):
             # of angular resolution and is what MSTM's own Q_sca is
             # analogous to -- use that as the canonical, resolution-
             # independent c_sca for cross-tool comparison.
-            c_sca=result["c_ext_minus_c_abs"],
-            asymmetry=result["asymmetry"],
+            c_sca=sum(c_sca_vals) / n_solves,
+            asymmetry=sum(asymmetry_vals) / n_solves,
             wall_time_seconds=wall_time,
             n_spheres=request.n_spheres,
-            raw={k: v for k, v in result.items() if k not in ("mueller", "jones")},
+            mueller=mueller,
+            raw=raw,
         )

@@ -70,7 +70,12 @@ class MaterialSpec(BaseModel):
                 "refidxdb_source and refidxdb_catalog_path must be given together"
             )
         catalog_source = self.refidxdb_source is not None
-        sources = (self.refractive_index, catalog_source or None, self.refidxdb_url, self.refidxdb_path)
+        sources = (
+            self.refractive_index,
+            catalog_source or None,
+            self.refidxdb_url,
+            self.refidxdb_path,
+        )
         if sum(s is not None for s in sources) != 1:
             raise ValueError(
                 "Specify exactly one of refractive_index, "
@@ -79,7 +84,8 @@ class MaterialSpec(BaseModel):
         return self
 
     def refractive_index_at(
-        self, wavelengths_um: npt.NDArray[np.float64],
+        self,
+        wavelengths_um: npt.NDArray[np.float64],
     ) -> npt.NDArray[np.complex128]:
         """Complex refractive index (n + ik), one value per wavelength."""
         wavelengths_um = np.asarray(wavelengths_um, dtype=np.float64)
@@ -124,6 +130,9 @@ class SweepRequest(BaseModel):
     mstm_translation_eps: float = 1e-8
     formulation: int = 0
     mlfmm_accuracy: int = 2
+    n_incidence_angles: int = 0
+    incidence_seed: int = 0
+    compute_mueller: bool = False
     extra: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -168,6 +177,9 @@ def expand_sweep(sweep: SweepRequest) -> list[ClusterRequest]:
                 mstm_translation_eps=sweep.mstm_translation_eps,
                 formulation=sweep.formulation,
                 mlfmm_accuracy=sweep.mlfmm_accuracy,
+                n_incidence_angles=sweep.n_incidence_angles,
+                incidence_seed=sweep.incidence_seed,
+                compute_mueller=sweep.compute_mueller,
                 extra=sweep.extra,
             )
         )
