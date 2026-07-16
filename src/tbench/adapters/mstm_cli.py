@@ -129,8 +129,21 @@ class MstmCliAdapter(ScattererAdapter):
                 # it out here rather than in pymstm itself, since the .inp
                 # text writer has no further "true unnormalized" mode to
                 # ask for.
+                #
+                # That raw (post-2*pi-correction) S11/S12 still follows the
+                # Bohren-Huffman dCsca/dOmega = S11/k^2 convention (confirmed
+                # empirically: integrating raw S11 over the sphere for a
+                # single symmetric sphere reproduces k^2*Csca), not the
+                # radiative-transfer phase-function convention (integral
+                # over the sphere == 4*pi) callers actually want -- apply
+                # that rescaling here too, same as the other three adapters.
+                phase_norm = 4.0 * math.pi / (k**2 * c_sca_vals[i])
                 mueller = [
-                    [theta, row[0] / (2 * math.pi), row[4] / (2 * math.pi)]
+                    [
+                        theta,
+                        row[0] / (2 * math.pi) * phase_norm,
+                        row[4] / (2 * math.pi) * phase_norm,
+                    ]
                     for theta, row in zip(sm["angles_deg"], sm["matrix"])
                     if theta >= 0
                 ]

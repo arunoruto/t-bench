@@ -547,10 +547,15 @@ if "tbench_results" in st.session_state:
         st.caption(
             "Angle-resolved quantities for a *single* wavelength (an angular "
             "distribution isn't a wavelength-swept quantity) -- pick which "
-            "one below. S12/S11 = degree of linear polarization (DoLP) for "
-            "unpolarized incident light. mstm-cli plots against its own "
-            "native theta grid; every other adapter shares the N_theta grid "
-            "set above."
+            "one below. S11 is normalized to the standard radiative-transfer "
+            "phase-function convention (integral(S11 dOmega) over the full "
+            "sphere == 4*pi), not the tools' own raw Bohren-Huffman-style "
+            "dCsca/dOmega=S11/k^2 units -- confirmed empirically that both "
+            "tools' raw output followed the latter, not the former. "
+            "S12/S11 = degree of linear polarization (DoLP) for unpolarized "
+            "incident light (unaffected by this rescaling, since it's a "
+            "ratio). mstm-cli plots against its own native theta grid; "
+            "every other adapter shares the N_theta grid set above."
         )
         mueller_wl_idx = st.select_slider(
             "Wavelength (um)",

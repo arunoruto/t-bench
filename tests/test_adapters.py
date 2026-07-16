@@ -380,3 +380,54 @@ def test_mueller_matrix_agrees_across_all_adapters():
             assert cli_s11 == pytest.approx(py_s11, rel=0.02), (
                 f"mstm-cli S11 magnitude mismatch at theta={theta_deg}"
             )
+
+
+@pytest.mark.parametrize(
+    "adapter_cls",
+    [MstmPythonAdapter, MstmCliAdapter, Fastmm2PythonAdapter, Fastmm2CliAdapter],
+)
+def test_mueller_s11_is_normalized_phase_function(adapter_cls):
+    """Regression test for a real bug: all four adapters' *raw* S11 output
+    (get_scattering_angle() for MSTM, the mueller.h5/result["mueller"]
+    array for FaSTMM2) follows the standard Bohren-Huffman convention
+    dCsca/dOmega = S11/k**2 -- i.e. integral(S11 dOmega) over the sphere
+    equals k**2*Csca, confirmed empirically -- not the radiative-transfer
+    phase-function convention (integral(S11 dOmega) == 4*pi) that
+    ScatterResult.mueller's docstring promises and that a "phase function"
+    is expected to obey by definition. Each adapter must rescale by
+    4*pi/(k**2*Csca) before returning S11/S12.
+
+    Uses a single sphere (azimuthally symmetric, so S11 depends only on
+    theta) so integral(S11 dOmega) reduces to a clean 1D polar integral:
+    2*pi * integral(S11(theta)*sin(theta) dtheta, theta=0..pi).
+    """
+    import numpy as np
+
+    adapter = adapter_cls()
+    if not adapter.is_available():
+        pytest.skip(f"{adapter.name} not available")
+
+    k = 2 * 3.141592653589793 / 0.5
+    request = ClusterRequest(
+        coords=[(0.0, 0.0, 0.0)],
+        radii=[1.0],
+        refractive_index=[(1.5, 0.01)],
+        wavenumber=k,
+        n_theta=181,
+        n_phi=1,
+        tolerance=1e-8,
+        max_iterations=2000,
+        formulation=0,
+        compute_mueller=True,
+    )
+    result = adapter.solve(request)
+    assert result.mueller is not None
+
+    m = np.array(result.mueller)
+    theta_rad = np.radians(m[:, 0])
+    s11 = m[:, 1]
+    integral = 2 * np.pi * np.trapezoid(s11 * np.sin(theta_rad), theta_rad)
+    assert integral == pytest.approx(4 * 3.141592653589793, rel=0.01), (
+        f"{adapter.name}: S11 does not integrate to 4*pi over the sphere "
+        f"(got {integral:.4f}) -- not a properly normalized phase function"
+    )

@@ -134,6 +134,18 @@ class MstmPythonAdapter(ScattererAdapter):
                     # runs; see the investigation this session). This
                     # per-angle path matches what pyMSTM's own dashboard
                     # already uses for the same reason.
+                    #
+                    # get_scattering_angle()'s raw S11/S12 satisfy the
+                    # standard Bohren-Huffman convention dCsca/dOmega =
+                    # S11/k^2 (confirmed empirically: integrating raw S11
+                    # over the full sphere for a single symmetric sphere
+                    # reproduces k^2*Csca to within numerical-integration
+                    # error), *not* the radiative-transfer phase-function
+                    # convention (integral over the sphere == 4*pi) that
+                    # is the actual "phase function" callers expect --
+                    # rescale here so the reported values are directly
+                    # that phase function: p(theta) = 4*pi*S11/(k^2*Csca).
+                    phase_norm = 4.0 * math.pi / (k**2 * c_sca_vals[i])
                     phi = math.radians(azimuthal_deg)
                     mueller = []
                     for theta_deg in [
@@ -142,7 +154,13 @@ class MstmPythonAdapter(ScattererAdapter):
                     ]:
                         costheta = math.cos(math.radians(theta_deg))
                         sm = m.get_scattering_angle(costheta=costheta, phi=phi)
-                        mueller.append([theta_deg, float(sm[0]), float(sm[1])])
+                        mueller.append(
+                            [
+                                theta_deg,
+                                float(sm[0]) * phase_norm,
+                                float(sm[1]) * phase_norm,
+                            ]
+                        )
         finally:
             m.finalize()
         wall_time = time.perf_counter() - t0

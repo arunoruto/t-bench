@@ -162,11 +162,19 @@ class ScatterResult(BaseModel):
     A reconciled, tool-independent ``[[theta_deg, S11, S12], ...]`` on a
     uniform 0-180deg grid with n_theta points -- both tools evaluated at
     identical angles, so this compares directly with no interpolation.
-    S11 is the phase function; DoLP = -S12/S11. Not the tools' own native
-    full 4x4 Mueller matrices (those have incompatible column/row
-    conventions between MSTM and FaSTMM2 -- see adapters/mstm_python.py's
-    and fastmm2_python.py's comments); only S11/S12 are extracted since
-    that's what's needed for phase function/DoLP comparison."""
+    S11 is the phase function, normalized to the standard radiative-
+    transfer convention ``integral(S11 dOmega) == 4*pi`` (both tools'
+    *raw* S11 instead follow the Bohren-Huffman ``dCsca/dOmega = S11/k^2``
+    convention -- confirmed empirically by integrating raw S11 over the
+    sphere for a single symmetric sphere and comparing to k^2*Csca -- so
+    every adapter rescales by ``4*pi/(k^2*Csca)`` before returning it
+    here); DoLP = -S12/S11 (scale-invariant, so this rescaling doesn't
+    change it, but S12 is rescaled by the same factor for consistency).
+    Not the tools' own native full 4x4 Mueller matrices (those have
+    incompatible column/row conventions between MSTM and FaSTMM2 -- see
+    adapters/mstm_python.py's and fastmm2_python.py's comments); only
+    S11/S12 are extracted since that's what's needed for phase
+    function/DoLP comparison."""
 
     raw: dict[str, Any] = Field(default_factory=dict)
     """Tool-native output, for debugging -- not part of the stable schema."""

@@ -128,9 +128,24 @@ class Fastmm2PythonAdapter(ScattererAdapter):
                 # the theta_deg-sounding convention elsewhere), S11, S12,
                 # ...], row-major, phi outermost: the first n_theta rows
                 # are exactly the phi=0 cut regardless of N_phi.
+                #
+                # FaSTMM2's raw S11 (mie.f90: (|S1|^2+...+|S4|^2)/2) is the
+                # standard Bohren-Huffman dCsca/dOmega = S11/k^2 convention
+                # (confirmed empirically: integrating raw S11 over the
+                # sphere for a single symmetric sphere reproduces
+                # k^2*Csca), not the radiative-transfer phase-function
+                # convention (integral over the sphere == 4*pi) that
+                # callers actually want -- rescale to that here.
+                phase_norm = (
+                    4.0 * np.pi / (request.wavenumber**2 * c_sca_vals[i])
+                )
                 m = result["mueller"][: request.n_theta]
                 mueller = [
-                    [float(np.degrees(row[1])), float(row[2]), float(row[3])]
+                    [
+                        float(np.degrees(row[1])),
+                        float(row[2]) * phase_norm,
+                        float(row[3]) * phase_norm,
+                    ]
                     for row in m
                 ]
         wall_time = time.perf_counter() - t0

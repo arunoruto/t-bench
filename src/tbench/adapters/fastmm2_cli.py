@@ -156,8 +156,19 @@ class Fastmm2CliAdapter(ScattererAdapter):
             c_sca_vals.append(float(crs[1]))
             asymmetry_vals.append(float(crs[4]))
             if raw_mueller is not None:
+                # FaSTMM2's raw S11 follows the standard Bohren-Huffman
+                # dCsca/dOmega = S11/k^2 convention, not the radiative-
+                # transfer phase-function convention (integral over the
+                # sphere == 4*pi) callers actually want -- see the matching
+                # comment in fastmm2_python.py for the empirical
+                # confirmation.
+                phase_norm = 4.0 * np.pi / (request.wavenumber**2 * c_sca_vals[i])
                 mueller = [
-                    [float(np.degrees(row[1])), float(row[2]), float(row[3])]
+                    [
+                        float(np.degrees(row[1])),
+                        float(row[2]) * phase_norm,
+                        float(row[3]) * phase_norm,
+                    ]
                     for row in raw_mueller
                 ]
         wall_time = time.perf_counter() - t0
