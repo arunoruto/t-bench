@@ -146,14 +146,55 @@ class MstmPythonAdapter(ScattererAdapter):
                     # rescale here so the reported values are directly
                     # that phase function: p(theta) = 4*pi*S11/(k^2*Csca).
                     phase_norm = 4.0 * math.pi / (k**2 * c_sca_vals[i])
-                    phi = math.radians(azimuthal_deg)
+                    #
+                    # get_scattering_angle()'s (costheta, phi) are *lab-
+                    # frame* spherical coordinates, NOT measured relative
+                    # to the incident direction -- confirmed empirically
+                    # by locating the forward-scattering peak: it sits at
+                    # lab-frame (theta=beta_deg, phi=alpha_deg), matching
+                    # k_hat = Rz(alpha).Ry(beta).z_hat (mstm-input-37.f90's
+                    # own incident-wave convention), not at (theta=0, any
+                    # phi) as naively assumed. So sweeping theta_deg at a
+                    # fixed phi=azimuthal_deg (the old code here) only
+                    # traces a lab-frame meridian plane, which coincides
+                    # with the physically-meaningful "angle from the
+                    # incident direction" sweep FaSTMM2's rotated-geometry
+                    # approach reports only when beta_deg==0 -- for any
+                    # tilted incidence it's a completely different (and
+                    # wrong) cut. Fix: rotate each desired
+                    # (theta_rel, phi_rel=0) point -- theta_rel measured
+                    # from the incident direction, phi_rel=0 the
+                    # reference meridian containing the incident
+                    # polarization axis -- into the lab frame via the same
+                    # R = Rz(alpha).Ry(beta) that defines k_hat, before
+                    # calling get_scattering_angle(). Verified against
+                    # FaSTMM2 (which measures angles this way natively,
+                    # since it rotates the *cluster* instead of the wave)
+                    # to 3-4 significant figures at every angle for a
+                    # tilted (beta=30, alpha=45) 3-sphere case. At
+                    # beta=alpha=0 this reduces exactly to the old
+                    # phi=azimuthal_deg=0 behavior (R is the identity), so
+                    # existing zero-incidence results are unaffected.
+                    alpha_rad = math.radians(azimuthal_deg)
+                    beta_rad = math.radians(polar_deg)
+                    cos_a, sin_a = math.cos(alpha_rad), math.sin(alpha_rad)
+                    cos_b, sin_b = math.cos(beta_rad), math.sin(beta_rad)
                     mueller = []
                     for theta_deg in [
                         180.0 * j / (request.n_theta - 1)
                         for j in range(request.n_theta)
                     ]:
-                        costheta = math.cos(math.radians(theta_deg))
-                        sm = m.get_scattering_angle(costheta=costheta, phi=phi)
+                        theta_rel = math.radians(theta_deg)
+                        sin_t, cos_t = math.sin(theta_rel), math.cos(theta_rel)
+                        # Ry(beta) applied to [sin_t, 0, cos_t]:
+                        x1 = cos_b * sin_t + sin_b * cos_t
+                        z1 = -sin_b * sin_t + cos_b * cos_t
+                        # Rz(alpha) applied to [x1, 0, z1]:
+                        theta_lab = math.acos(max(-1.0, min(1.0, z1)))
+                        phi_lab = math.atan2(sin_a * x1, cos_a * x1)
+                        sm = m.get_scattering_angle(
+                            costheta=math.cos(theta_lab), phi=phi_lab
+                        )
                         mueller.append(
                             [
                                 theta_deg,

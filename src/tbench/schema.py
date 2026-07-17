@@ -111,15 +111,23 @@ class ClusterRequest(BaseModel):
 
     compute_mueller: bool = False
     """MSTM and FaSTMM2: also compute S11 (phase function) and S12 (for
-    DoLP = -S12/S11) as a function of scattering angle, stored in
-    ``ScatterResult.mueller`` as ``[[theta_deg, S11, S12], ...]`` on a
-    uniform 0-180deg grid with ``n_theta`` points (both tools use
-    identical angles -- no interpolation needed for comparison; see
-    adapters/mstm_python.py's comment for why the per-angle
-    ``get_scattering_angle()`` API is used for MSTM instead of its
-    faster but unreliable batch ``get_scattering_matrix()``). This is
-    cheap post-processing on the already-solved field (not a re-solve),
-    but off by default to keep it opt-in."""
+    DoLP = -S12/S11) as a function of scattering angle theta, measured
+    *relative to the incident direction* (theta=0 is forward scattering
+    along the incident wave, regardless of incident_polar_deg/
+    incident_azimuthal_deg), stored in ``ScatterResult.mueller`` as
+    ``[[theta_deg, S11, S12], ...]`` on a uniform 0-180deg grid with
+    ``n_theta`` points (both tools use identical angles -- no
+    interpolation needed for comparison; see adapters/mstm_python.py's
+    comment for why the per-angle ``get_scattering_angle()`` API is used
+    for MSTM instead of its faster but unreliable batch
+    ``get_scattering_matrix()``, and for the incident-direction rotation
+    needed to get MSTM's lab-frame angles onto this convention at all).
+    mstm-cli can only do this for zero-polar-angle incidence (its native
+    text-table output has no equivalent per-angle query to rotate --
+    ``ScatterResult.mueller`` comes back ``None`` from mstm-cli otherwise,
+    see adapters/mstm_cli.py's comment). This is cheap post-processing on
+    the already-solved field (not a re-solve), but off by default to keep
+    it opt-in."""
 
     extra: dict[str, Any] = Field(default_factory=dict)
     """Escape hatch for adapter-specific overrides not worth promoting to

@@ -431,3 +431,58 @@ def test_mueller_s11_is_normalized_phase_function(adapter_cls):
         f"{adapter.name}: S11 does not integrate to 4*pi over the sphere "
         f"(got {integral:.4f}) -- not a properly normalized phase function"
     )
+
+
+def test_mueller_matrix_matches_at_tilted_incidence():
+    """Regression test for a real bug: mstm-python's Mueller-matrix
+    extraction swept theta at a *fixed* phi=incident_azimuthal_deg,
+    implicitly assuming get_scattering_angle()'s (costheta, phi) are
+    measured *relative to the incident direction*. They are not --
+    they're lab-frame spherical coordinates (confirmed empirically: the
+    forward-scattering peak sits at lab-frame (theta=incident_polar_deg,
+    phi=incident_azimuthal_deg), matching k_hat = Rz(alpha).Ry(beta).z_hat
+    -- mstm-input-37.f90's own incident-wave convention -- not at
+    (theta=0, any phi)). A fixed-phi theta-sweep only traces the correct
+    "angle from the incident direction" cut when the incident polar angle
+    is 0 -- for any tilted incidence it's a structurally different (and
+    wrong) cut, which is exactly why every earlier Mueller-matrix test
+    this session used the default zero incident angle and never caught
+    this. FaSTMM2 is unaffected (it rotates the *cluster* instead of the
+    wave, so its own theta/phi are natively "angle from incident
+    direction"), so this is a pure MSTM-side bug, invisible in DoLP or
+    S11 shape comparisons at zero incidence but glaring once beta != 0
+    (values were uncorrelated, not just "shifted", before the fix)."""
+    mstm = MstmPythonAdapter()
+    fastmm2 = Fastmm2PythonAdapter()
+    if not (mstm.is_available() and fastmm2.is_available()):
+        pytest.skip("need both mstm-python and fastmm2-python available")
+
+    request = ClusterRequest(
+        coords=[(-1.5, 0.3, 0.1), (1.5, -0.4, 0.2), (0.5, 2.5, -0.3)],
+        radii=[1.0, 1.0, 1.0],
+        refractive_index=[(1.5, 0.01)] * 3,
+        wavenumber=2 * 3.141592653589793 / 0.5,
+        n_theta=21,
+        n_phi=1,
+        tolerance=1e-8,
+        max_iterations=2000,
+        incident_polar_deg=30.0,
+        incident_azimuthal_deg=45.0,
+        formulation=0,
+        compute_mueller=True,
+    )
+    r_mstm = mstm.solve(request)
+    r_fastmm2 = fastmm2.solve(request)
+
+    m_mstm = r_mstm.mueller
+    m_f2 = r_fastmm2.mueller
+    assert m_mstm is not None and m_f2 is not None
+    for (theta_deg, s11_mstm, s12_mstm), (_, s11_f2, s12_f2) in zip(m_mstm, m_f2):
+        assert s11_mstm == pytest.approx(s11_f2, rel=0.02), (
+            f"S11 mismatch at theta={theta_deg} under tilted incidence"
+        )
+        dolp_mstm = -s12_mstm / s11_mstm
+        dolp_f2 = -s12_f2 / s11_f2
+        assert dolp_mstm == pytest.approx(dolp_f2, abs=0.1), (
+            f"DoLP mismatch at theta={theta_deg} under tilted incidence"
+        )

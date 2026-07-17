@@ -253,13 +253,21 @@ compute_mueller = w4.checkbox(
     value=False,
     help=(
         "Adds one extra angle-resolved post-processing pass (on the *first* "
-        "incidence direction only, even with averaging enabled above) at "
-        "every wavelength in the sweep -- cheap relative to the solve "
+        "incidence direction only, even with averaging enabled above -- "
+        "which is *not* generally the zero/default incidence angle, since "
+        "Halton-sampled directions are essentially never exactly (0,0)) "
+        "at every wavelength in the sweep -- cheap relative to the solve "
         "itself, but not free. Enables the phase function / DoLP plots "
-        "below. mstm-cli reports its own native -180..180deg, 1deg-"
-        "resolution grid regardless of N_theta (confirmed the .inp "
-        "scattering_map_dimension keyword has no effect on this output); "
-        "every other adapter follows N_theta above."
+        "below, with theta measured relative to *that* incidence "
+        "direction (theta=0 = forward scattering along it). mstm-cli "
+        "reports its own native -180..180deg, 1deg-resolution grid "
+        "regardless of N_theta (confirmed the .inp scattering_map_dimension "
+        "keyword has no effect on this output), and can only do this for "
+        "zero-polar-angle incidence -- its Mueller matrix comes back empty "
+        "otherwise (no per-angle query to rotate onto the tilted "
+        "incident-relative convention the way mstm-python can). Every "
+        "other adapter follows N_theta above and handles any incidence "
+        "angle correctly."
     ),
 )
 

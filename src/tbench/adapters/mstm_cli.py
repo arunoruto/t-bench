@@ -68,7 +68,26 @@ class MstmCliAdapter(ScattererAdapter):
             with tempfile.TemporaryDirectory() as tmp:
                 inp_path = os.path.join(tmp, "run.inp")
                 out_name = "mstm_output.dat"
-                compute_this_mueller = request.compute_mueller and i == 0
+                # The CLI's own "scattering matrix in incident plane" text
+                # table always sweeps *lab-frame* theta (0..360, via the
+                # +/- angle-label trick) at a *fixed* phi=incident_alpha_deg
+                # -- a single lab-frame meridian plane. That coincides with
+                # "angle measured from the incident direction" (what this
+                # feature is supposed to report, and what FaSTMM2's
+                # rotated-geometry approach reports natively) only when the
+                # incident polar angle is 0 -- for any tilted incidence
+                # it's a structurally different (and wrong) cut, and
+                # unlike mstm-python there's no per-angle CLI query to
+                # correct it with a rotation (confirmed via mstm_python.py:
+                # get_scattering_angle()'s forward-scattering peak sits at
+                # lab-frame (theta=beta_deg, phi=alpha_deg), not (theta=0,
+                # any phi), so a fixed-phi theta-sweep is simply the wrong
+                # shape once beta_deg != 0). Restrict to the zero-polar-
+                # angle case rather than silently return angularly wrong
+                # data.
+                compute_this_mueller = (
+                    request.compute_mueller and i == 0 and polar_deg == 0.0
+                )
                 write_inp_file(
                     inp_path,
                     radii=scaled_radii,
